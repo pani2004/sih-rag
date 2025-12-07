@@ -175,6 +175,42 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Inngest-based chat (for concurrent sessions)
+  async sendChatJob(request: ChatRequest, sessionId: string): Promise<{ jobId: string }> {
+    const response = await fetch('/api/chat/job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...request,
+        sessionId,
+      }),
+    });
+    return handleResponse(response);
+  },
+
+  // Poll for job completion (old method)
+  async getChatJobStatus(jobId: string): Promise<{
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    response?: string;
+    citations?: Citation[];
+    error?: string;
+  }> {
+    const response = await fetch(`/api/chat/job/${jobId}`);
+    return handleResponse(response);
+  },
+
+  // Get session status (Inngest)
+  async getSessionStatus(sessionId: string): Promise<{
+    conversationId?: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    response?: string;
+    citations?: Citation[];
+    error?: string;
+  }> {
+    const response = await fetch(`/api/chat/session/${sessionId}`);
+    return handleResponse(response);
+  },
 };
 
 export { APIError };

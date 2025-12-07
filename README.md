@@ -19,6 +19,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** system with full-sta
 ### Frontend
 - ✅ **Next.js 14** - React with App Router and TypeScript
 - ✅ **Real-time Streaming** - Server-Sent Events for live LLM responses
+- ✅ **Multi-Session Chats** - Multiple conversations with individual contexts
 - ✅ **Modern UI** - shadcn/ui components with Tailwind CSS
 - ✅ **Chat Interface** - ChatGPT-style conversation experience
 - ✅ **Document Management** - Upload, view, and manage knowledge base
@@ -285,6 +286,18 @@ docker compose --profile ingestion up ingestion
 - **API Client**: Fetch API with Server-Sent Events (SSE)
 - **Markdown Rendering**: react-markdown with syntax highlighting
 - **Icons**: Lucide React
+
+### 💬 Multi-Session Chat
+
+Chat in multiple conversations with individual session management!
+
+**Features**:
+- ✅ Multiple independent chat conversations with separate histories
+- ✅ Real-time streaming responses with thinking animations
+- ✅ Switch between conversations seamlessly
+- ✅ Each conversation maintains its own context
+- ✅ Global document knowledge base shared across all chats
+- ✅ Automatic conversation creation and management
 
 
 ## 🔌 API Endpoints
@@ -693,6 +706,73 @@ The reranker adds three specialized metrics:
 - `reranker_rank_change_positions` - Average position change after reranking
 
 Higher rank change indicates the reranker is improving relevance.
+
+---
+
+## ⚡ Concurrent Streaming Notes
+
+### Multiple Chat Sessions
+
+The frontend supports **true concurrent chat sessions** - you can have multiple conversations streaming simultaneously. Each conversation maintains its own:
+- Independent streaming state
+- Separate thinking messages
+- Isolated citation data
+- Per-conversation processing status
+
+### Ollama Concurrency Limitation
+
+**Important**: Ollama processes LLM generation requests **sequentially by default** (one at a time). This means:
+
+✅ **What works concurrently:**
+- Search operations (database queries)
+- Citation retrieval
+- Multiple users browsing/uploading documents
+- Frontend UI interactions across multiple chats
+
+❌ **What queues:**
+- LLM text generation (Ollama's `/api/generate` endpoint)
+- When 2+ chats request responses simultaneously, they'll process one after another
+
+### Why This Happens
+
+Ollama runs a single model instance in memory and handles generation requests in a queue. This is by design to:
+- Prevent GPU/CPU memory exhaustion
+- Ensure stable performance
+- Avoid model loading/unloading overhead
+
+### Solutions for True Parallel Generation
+
+If you need multiple simultaneous LLM generations:
+
+1. **Multiple Ollama Instances** (recommended):
+   ```bash
+   # Run Ollama on different ports
+   OLLAMA_HOST=127.0.0.1:11434 ollama serve &
+   OLLAMA_HOST=127.0.0.1:11435 ollama serve &
+   
+   # Configure load balancer or round-robin in backend
+   ```
+
+2. **Use OpenAI-compatible API** with higher concurrency:
+   - Switch to LiteLLM, vLLM, or TGI for production
+   - These support concurrent inference with batching
+
+3. **Cloud LLM APIs** (OpenAI, Anthropic, etc.):
+   - Handle massive concurrent requests
+   - Trade-off: costs and external dependency
+
+### Current Behavior
+
+With the current setup:
+- **Frontend**: Shows both chats streaming (smooth UX)
+- **Backend**: Processes requests independently but sequentially
+- **User Experience**: Second request waits for first to complete, then starts immediately
+- **Logging**: Each request tracked with unique ID for monitoring
+
+This is perfectly fine for:
+- Single user with occasional concurrent chats
+- Development and testing
+- Small team usage (< 5 simultaneous generations)
 
 ---
 

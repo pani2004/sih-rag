@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useChatStore } from '@/lib/store';
 
-export function useFileUpload(onRefetch: () => void) {
+export function useFileUpload(conversationId: string, onRefetch: () => void) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingFileName, setUploadingFileName] = useState('');
@@ -22,7 +22,7 @@ export function useFileUpload(onRefetch: () => void) {
       role: 'assistant' as const,
       content: `📎 Processing **${file.name}**...`,
     };
-    addMessage(uploadStartMessage);
+    addMessage(conversationId, uploadStartMessage);
 
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => Math.min(prev + 10, 90));
@@ -36,7 +36,7 @@ export function useFileUpload(onRefetch: () => void) {
         role: 'assistant' as const,
         content: `✅ Successfully uploaded and processed **${file.name}**!\n\n📊 Created ${response.chunks_created} searchable chunks.\n\nYou can now ask questions about this document.`,
       };
-      addMessage(successMessage);
+      addMessage(conversationId, successMessage);
       
       toast.success('Document processed successfully!');
       onRefetch();
@@ -45,7 +45,7 @@ export function useFileUpload(onRefetch: () => void) {
         role: 'assistant' as const,
         content: `❌ Failed to upload **${file.name}**: ${error.message}`,
       };
-      addMessage(errorMessage);
+      addMessage(conversationId, errorMessage);
       toast.error(`Upload failed: ${error.message}`);
     } finally {
       clearInterval(progressInterval);

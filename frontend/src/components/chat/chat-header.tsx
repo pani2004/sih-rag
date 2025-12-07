@@ -51,7 +51,7 @@ export function ChatHeader({
             <div>
               <h1 className="text-xl font-semibold">RAG Assistant</h1>
               <p className="text-xs text-muted-foreground">
-                Powered by Ollama
+                Powered by HASH-IT-OUT
               </p>
             </div>
           </div>

@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { Sparkles, User, BookOpen } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { CitationViewer } from './citation-viewer';
 import type { Citation } from '@/lib/types';
 
 interface Message {
@@ -19,6 +22,14 @@ interface MessageItemProps {
 }
 
 export function MessageItem({ message }: MessageItemProps) {
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [citationViewerOpen, setCitationViewerOpen] = useState(false);
+
+  const handleCitationClick = (citation: Citation) => {
+    setSelectedCitation(citation);
+    setCitationViewerOpen(true);
+  };
+
   return (
     <div>
       <div
@@ -79,12 +90,17 @@ export function MessageItem({ message }: MessageItemProps) {
                 const pageNum = citation.metadata?.page || citation.metadata?.page_number;
                 
                 return (
-                  <Card key={citation.number} className="p-2">
-                    <div className="flex items-center gap-2">
+                  <Button
+                    key={citation.number}
+                    variant="outline"
+                    className="w-full justify-start h-auto p-2 hover:bg-accent"
+                    onClick={() => handleCitationClick(citation)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
                       <div className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
                         {citation.number}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center gap-1 text-sm">
                           <span className="font-medium truncate">{filename}</span>
                           {pageNum && (
@@ -93,7 +109,7 @@ export function MessageItem({ message }: MessageItemProps) {
                         </div>
                       </div>
                     </div>
-                  </Card>
+                  </Button>
                 );
               })}
             </div>
@@ -105,6 +121,12 @@ export function MessageItem({ message }: MessageItemProps) {
           </div>
         )}
       </div>
+      
+      <CitationViewer
+        citation={selectedCitation}
+        open={citationViewerOpen}
+        onOpenChange={setCitationViewerOpen}
+      />
     </div>
   );
 }

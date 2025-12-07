@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useChatStore } from '@/lib/store';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useChatLogic } from '@/hooks/use-chat-logic';
+import { useConcurrentChat } from '@/hooks/use-concurrent-chat';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
@@ -46,7 +46,7 @@ export function ChatInterface() {
     messages,
     handleSend,
     handleStop,
-  } = useChatLogic();
+  } = useConcurrentChat(currentConversationId || 'default');
 
   const { data: documentsData, refetch } = useQuery({
     queryKey: ['documents'],
@@ -69,7 +69,14 @@ export function ChatInterface() {
     handleDragLeave,
     handleDragOver,
     handleDrop,
-  } = useFileUpload(refetch);
+  } = useFileUpload(currentConversationId || 'default', refetch);
+
+  // Create initial conversation if none exists
+  useEffect(() => {
+    if (conversations.length === 0) {
+      createConversation();
+    }
+  }, []);
 
   // Mobile detection
   useEffect(() => {

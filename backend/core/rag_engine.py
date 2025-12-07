@@ -235,15 +235,22 @@ Your Answer (synthesize the information above into a clear response):"""
         prompt = self._build_prompt(query, context, conversation_history)
         
         # Stream response with timing
-        logger.info("Streaming response...")
+        import asyncio
+        request_id = id(asyncio.current_task())
+        logger.info(f"[Request {request_id}] Starting streaming response...")
         start_time = time.time()
-        async for chunk in self.ollama.generate_chat_completion_stream(prompt):
-            yield chunk
+        
+        try:
+            async for chunk in self.ollama.generate_chat_completion_stream(prompt):
+                yield chunk
+        except Exception as e:
+            logger.error(f"[Request {request_id}] Streaming error: {e}")
+            raise
         
         # Record generation metrics
         generation_duration = time.time() - start_time
         metrics.rag_generation_latency.labels(model=settings.ollama_llm_model).observe(generation_duration)
-        logger.info(f"Generation completed in {generation_duration:.2f}s")
+        logger.info(f"[Request {request_id}] Generation completed in {generation_duration:.2f}s")
     
     async def chat(
         self,

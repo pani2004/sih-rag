@@ -206,8 +206,15 @@ async def chat_stream(
     Chat with the RAG assistant (streaming).
     
     Returns server-sent events with response chunks.
+    Each request is processed independently with its own async context.
     """
+    import asyncio
+    
     async def generate():
+        # Get unique request identifier for logging
+        request_id = id(asyncio.current_task())
+        logger.info(f"[Request {request_id}] Starting chat stream for message: {request.message[:50]}...")
+        
         try:
             # Convert message history
             conversation_history = None
@@ -253,6 +260,8 @@ async def chat_stream(
             # Send completion event
             yield f"data: {json.dumps({'status': 'done', 'response': full_response})}\n\n"
             
+            logger.info(f"[Request {request_id}] Completed successfully")
+            
             # Record success metric
             if METRICS_AVAILABLE:
                 metrics.rag_requests_total.labels(status="success").inc()
@@ -260,7 +269,7 @@ async def chat_stream(
         except Exception as e:
             if METRICS_AVAILABLE:
                 metrics.rag_requests_total.labels(status="error").inc()
-            logger.error(f"Streaming error: {e}", exc_info=True)
+            logger.error(f"[Request {request_id}] Streaming error: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
     return StreamingResponse(

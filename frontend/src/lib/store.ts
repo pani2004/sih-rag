@@ -10,6 +10,11 @@ interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  isProcessing?: boolean;
+  jobId?: string;
+  streamingMessage?: string;
+  streamingCitations?: any[];
+  thinkingMessage?: string;
 }
 
 interface ChatStore {
@@ -24,16 +29,22 @@ interface ChatStore {
   renameConversation: (id: string, title: string) => void;
   
   // Message management
-  addMessage: (message: ChatMessage) => void;
+  addMessage: (conversationId: string, message: ChatMessage) => void;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
   
-  // Streaming
+  // Job management
+  setConversationProcessing: (id: string, isProcessing: boolean, jobId?: string) => void;
+  
+  // Streaming state per conversation
   setIsStreaming: (isStreaming: boolean) => void;
+  setConversationStreaming: (id: string, streamingMessage: string | null, citations?: any[]) => void;
+  setConversationThinking: (id: string, thinkingMessage: string | null) => void;
   
   // Getters
   getCurrentMessages: () => ChatMessage[];
   getCurrentConversation: () => Conversation | undefined;
+  getConversation: (id: string) => Conversation | undefined;
 }
 
 const generateId = () => Math.random().toString(36).substring(7);
@@ -59,11 +70,13 @@ export const useChatStore = create<ChatStore>()(
           messages: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          isProcessing: false,
         };
         set((state) => ({
           conversations: [newConversation, ...state.conversations],
           currentConversationId: id,
         }));
+        console.log(`[Store] Created new conversation: ${id}`);
       },
       
       deleteConversation: (id) => {
@@ -91,27 +104,10 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
       
-      addMessage: (message) => {
+      addMessage: (conversationId, message) => {
         set((state) => {
-          const currentId = state.currentConversationId;
-          if (!currentId) {
-            // Create new conversation if none exists
-            const id = generateId();
-            const newConversation: Conversation = {
-              id,
-              title: message.role === 'user' ? generateTitle([message]) : 'New Chat',
-              messages: [message],
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
-            return {
-              conversations: [newConversation, ...state.conversations],
-              currentConversationId: id,
-            };
-          }
-          
           const updatedConversations = state.conversations.map(conv => {
-            if (conv.id === currentId) {
+            if (conv.id === conversationId) {
               const newMessages = [...conv.messages, message];
               return {
                 ...conv,
@@ -148,7 +144,42 @@ export const useChatStore = create<ChatStore>()(
         get().createConversation();
       },
       
+      setConversationProcessing: (id, isProcessing, jobId) => {
+        set((state) => ({
+          conversations: state.conversations.map(conv =>
+            conv.id === id 
+              ? { ...conv, isProcessing, jobId, updatedAt: Date.now() }
+              : conv
+          ),
+        }));
+      },
+      
       setIsStreaming: (isStreaming) => set({ isStreaming }),
+      
+      setConversationStreaming: (id, streamingMessage, citations) => {
+        set((state) => ({
+          conversations: state.conversations.map(conv =>
+            conv.id === id
+              ? { 
+                  ...conv, 
+                  streamingMessage: streamingMessage || undefined,
+                  streamingCitations: citations || undefined,
+                  updatedAt: Date.now() 
+                }
+              : conv
+          ),
+        }));
+      },
+      
+      setConversationThinking: (id, thinkingMessage) => {
+        set((state) => ({
+          conversations: state.conversations.map(conv =>
+            conv.id === id
+              ? { ...conv, thinkingMessage: thinkingMessage || undefined }
+              : conv
+          ),
+        }));
+      },
       
       getCurrentMessages: () => {
         const state = get();
@@ -159,6 +190,11 @@ export const useChatStore = create<ChatStore>()(
       getCurrentConversation: () => {
         const state = get();
         return state.conversations.find(c => c.id === state.currentConversationId);
+      },
+      
+      getConversation: (id) => {
+        const state = get();
+        return state.conversations.find(c => c.id === id);
       },
     }),
     {
@@ -175,7 +211,7 @@ interface SettingsStore {
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
-      useStreaming: true,
+      useStreaming: true, // Always use streaming by default
       setUseStreaming: (useStreaming) => set({ useStreaming }),
     }),
     {
