@@ -9,7 +9,7 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
@@ -20,7 +20,14 @@
     --destructive: 0 84.2% 60.2%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --ring: 262 83% 58%;
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 240 10% 3.9%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 5.9% 90%;
   }
 
   .dark {
@@ -56,9 +63,42 @@
   * {
     border-color: hsl(var(--border));
   }
+  html,
+  body {
+    overscroll-behavior: none;
+  }
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* Light mode improvements */
+@layer components {
+  .light {
+    /* Ensure cards have slight elevation */
+    [data-slot="card"] {
+      box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    }
+    
+    /* Code blocks in light mode */
+    pre {
+      background-color: hsl(var(--muted)) !important;
+      border: 1px solid hsl(var(--border));
+    }
+    
+    /* Improve button contrast in light mode */
+    button[data-variant="ghost"]:hover {
+      background-color: hsl(var(--accent));
+    }
+  }
+  
+  /* Smooth theme transitions */
+  * {
+    transition-property: color, background-color, border-color;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
+  }
+}
+

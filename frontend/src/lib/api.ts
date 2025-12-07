@@ -61,13 +61,15 @@ export const api = {
     onChunk: (chunk: string) => void,
     onComplete?: (fullResponse: string, citations: Citation[]) => void,
     onError?: (error: Error) => void,
-    onCitations?: (citations: Citation[]) => void
+    onCitations?: (citations: Citation[]) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     try {
       const response = await fetch(`${API_URL}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
+        signal,
       });
 
       if (!response.ok) {
@@ -162,6 +164,14 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+    });
+    return handleResponse(response);
+  },
+
+  // Delete Document
+  async deleteDocument(documentId: number): Promise<{ message: string }> {
+    const response = await fetch(`${API_URL}/documents/${documentId}`, {
+      method: 'DELETE',
     });
     return handleResponse(response);
   },
