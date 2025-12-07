@@ -15,6 +15,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  timestamp?: number;
 }
 
 interface MessageItemProps {
@@ -85,7 +86,7 @@ export function MessageItem({ message }: MessageItemProps) {
                 <BookOpen className="h-3 w-3" />
                 <span>{message.citations.length} source{message.citations.length > 1 ? 's' : ''}</span>
               </div>
-              {message.citations.map((citation) => {
+              {message.citations?.map((citation) => {
                 const filename = citation.document_source.split('/').pop() || citation.document_source;
                 const pageNum = citation.metadata?.page || citation.metadata?.page_number;
                 

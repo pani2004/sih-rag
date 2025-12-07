@@ -19,9 +19,12 @@ export function useChatLogic() {
     setIsStreaming,
     isStreaming,
     getCurrentMessages,
+    getCurrentConversation,
   } = useChatStore();
   
   const messages = getCurrentMessages();
+  const currentConversation = getCurrentConversation();
+  const conversationId = currentConversation?.id;
   const { useStreaming } = useSettingsStore();
 
   const handleStop = () => {
@@ -30,11 +33,12 @@ export function useChatLogic() {
       abortControllerRef.current = null;
     }
     
-    if (currentStreamingMessage) {
-      addMessage({ 
+    if (currentStreamingMessage && conversationId) {
+      addMessage(conversationId, { 
         role: 'assistant', 
         content: currentStreamingMessage + '\n\n*[Response stopped by user]*', 
-        citations: currentCitations 
+        citations: currentCitations,
+        timestamp: Date.now()
       });
     }
     
@@ -45,10 +49,10 @@ export function useChatLogic() {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return;
+    if (!input.trim() || isStreaming || !conversationId) return;
 
-    const userMessage = { role: 'user' as const, content: input.trim() };
-    addMessage(userMessage);
+    const userMessage = { role: 'user' as const, content: input.trim(), timestamp: Date.now() };
+    addMessage(conversationId, userMessage);
     setInput('');
 
     if (useStreaming) {
@@ -75,7 +79,14 @@ export function useChatLogic() {
           },
           (fullResponse, citations) => {
             clearInterval(thinkingInterval);
-            addMessage({ role: 'assistant', content: fullResponse, citations });
+            if (conversationId) {
+              addMessage(conversationId, { 
+                role: 'assistant', 
+                content: fullResponse, 
+                citations,
+                timestamp: Date.now()
+              });
+            }
             setCurrentStreamingMessage(null);
             setCurrentCitations([]);
             setIsStreaming(false);
@@ -111,7 +122,14 @@ export function useChatLogic() {
           message: userMessage.content,
           conversation_history: messages,
         });
-        addMessage({ role: 'assistant', content: response.response, citations: response.citations });
+        if (conversationId) {
+          addMessage(conversationId, { 
+            role: 'assistant', 
+            content: response.response, 
+            citations: response.citations,
+            timestamp: Date.now()
+          });
+        }
       } catch (error: any) {
         toast.error(`Failed to send message: ${error.message}`);
       } finally {

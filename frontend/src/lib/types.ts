@@ -14,6 +14,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  timestamp?: number;
 }
 
 export interface ChatRequest {

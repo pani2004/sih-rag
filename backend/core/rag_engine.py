@@ -23,7 +23,7 @@ class RAGEngine:
     def __init__(self):
         """Initialize RAG engine."""
         self.ollama = ollama_client
-        self.max_context_length = 3000
+        self.max_context_length = 3500  # Increased for more comprehensive context
         self.use_hybrid_search = settings.use_hybrid_search
         self.use_reranker = settings.reranker_enabled
         self._reranker = None  # Lazy load reranker
@@ -61,15 +61,14 @@ class RAGEngine:
         if len(context) > self.max_context_length:
             context = context[:self.max_context_length] + "\n...(context truncated)"
         
-        prompt = f"""You are a helpful AI assistant. Use the following context to answer the user's question. 
-Synthesize the information into a clear, natural answer. DO NOT just list the sources - provide a coherent response.
+        prompt = f"""You are a knowledgeable AI assistant. Answer the question thoroughly and comprehensively using the provided context.
 
-Context from knowledge base:
+Context:
 {context}
 
-User Question: {user_query}
+Question: {user_query}
 
-Your Answer (synthesize the information above into a clear response):"""
+Provide a detailed, well-explained answer that covers all relevant aspects from the context. Use examples and elaborate on key points:"""
         
         return prompt
     
@@ -88,12 +87,16 @@ Your Answer (synthesize the information above into a clear response):"""
         Args:
             session: Database session
             query: Search query
-            limit: Maximum number of results
+            limit: Maximum number of results (default: from config)
             use_hybrid: Override hybrid search setting (default: self.use_hybrid_search)
             
         Returns:
             List of SearchResult instances
         """
+        # Use config default if not specified
+        if limit is None:
+            limit = settings.top_k_results
+        
         start_time = time.time()
         
         # Generate embedding for query
@@ -204,7 +207,9 @@ Your Answer (synthesize the information above into a clear response):"""
         self,
         session: AsyncSession,
         query: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        search_results: Optional[List[SearchResult]] = None,
+        max_tokens: int = 2048  # Increased from default 1024 for longer answers
     ) -> AsyncGenerator[str, None]:
         """
         Generate answer with streaming.
@@ -213,12 +218,14 @@ Your Answer (synthesize the information above into a clear response):"""
             session: Database session
             query: User's question
             conversation_history: Optional conversation history
+            search_results: Pre-fetched search results (avoids duplicate search)
             
         Yields:
             Text chunks as they are generated
         """
-        # Search knowledge base
-        search_results = await self.search(session, query)
+        # Use provided search results or fetch new ones
+        if search_results is None:
+            search_results = await self.search(session, query)
         
         # Format context
         if not search_results:
@@ -241,7 +248,10 @@ Your Answer (synthesize the information above into a clear response):"""
         start_time = time.time()
         
         try:
-            async for chunk in self.ollama.generate_chat_completion_stream(prompt):
+            async for chunk in self.ollama.generate_chat_completion_stream(
+                prompt,
+                max_tokens=max_tokens
+            ):
                 yield chunk
         except Exception as e:
             logger.error(f"[Request {request_id}] Streaming error: {e}")

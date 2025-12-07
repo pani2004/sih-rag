@@ -142,6 +142,8 @@ class OllamaClient:
         """
         Generate chat completion with streaming.
         
+        Each call creates its own HTTP client for true concurrent requests.
+        
         Args:
             prompt: The prompt to send to the model
             temperature: Sampling temperature
@@ -150,8 +152,16 @@ class OllamaClient:
         Yields:
             Text chunks as they are generated
         """
+        import asyncio
+        request_id = id(asyncio.current_task())
+        logger.debug(f"[Request {request_id}] Creating new HTTP client for Ollama streaming")
+        
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Create a new client for each request (no connection pooling bottleneck)
+            async with httpx.AsyncClient(
+                timeout=self.timeout,
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            ) as client:
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/api/generate",
@@ -161,7 +171,12 @@ class OllamaClient:
                         "stream": True,
                         "options": {
                             "temperature": temperature,
-                            "num_predict": max_tokens
+                            "num_predict": max_tokens,
+                            "num_ctx": 4096,  # Increased context window for more comprehensive answers
+                            "num_batch": 512,  # Increase batch size for faster token generation
+                            "num_thread": 8,   # Use more CPU threads
+                            "top_p": 0.9,      # Nucleus sampling for better quality
+                            "repeat_penalty": 1.1  # Reduce repetition
                         }
                     }
                 ) as response:

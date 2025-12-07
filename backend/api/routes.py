@@ -245,14 +245,15 @@ async def chat_stream(
             # Send citations
             yield f"data: {json.dumps({'status': 'citations', 'citations': citations})}\n\n"
             
-            # Stream response
+            # Stream response (pass search_results to avoid duplicate search)
             yield f"data: {json.dumps({'status': 'generating'})}\n\n"
             
             full_response = ""
             async for chunk in rag_engine.generate_answer_stream(
                 session,
                 request.message,
-                conversation_history
+                conversation_history,
+                search_results  # Reuse already-fetched results
             ):
                 full_response += chunk
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -278,6 +279,7 @@ async def chat_stream(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
     )
 

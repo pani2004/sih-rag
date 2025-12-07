@@ -141,7 +141,7 @@ export function useConcurrentChat(conversationId: string) {
       // Could show a warning or just allow it
     }
 
-    const userMessage = { role: 'user' as const, content: input.trim() };
+    const userMessage = { role: 'user' as const, content: input.trim(), timestamp: Date.now() };
     const messageContent = userMessage.content;
     addMessage(conversationId, userMessage);
     setInput('');
@@ -246,6 +246,7 @@ export function useConcurrentChat(conversationId: string) {
           role: 'assistant',
           content: fullResponse,
           citations: receivedCitations.length > 0 ? receivedCitations : undefined,
+          timestamp: Date.now(),
         });
       }
 
