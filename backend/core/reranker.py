@@ -65,13 +65,14 @@ class LRUCache:
 class RerankerConfig:
     """Configuration for the reranker with GPU optimizations."""
     model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "cuda" if (torch.cuda.is_available() and settings.reranker_use_gpu) else "cpu"
     batch_size: int = 128  # Optimized for RTX 3050 Ti (4GB VRAM)
     max_length: int = 256  # Reduced for faster processing
     use_cache: bool = True
     cache_size: int = 200
     early_stop_threshold: float = 0.95  # Stop if score > threshold
-    min_score_threshold: float = -10.0  # Skip very low scores
+    min_score_threshold: float = -5.0  # Aggressive pruning of irrelevant results
+    score_gap_threshold: float = 0.15  # Stop adding if gap to worst > threshold
     use_fp16: bool = True  # Use mixed precision for faster GPU inference
     
 
@@ -229,12 +230,15 @@ class Reranker:
             # Get scores with caching optimization
             scores = self._get_scores_optimized(query, results)
             
-            # Use min-heap for efficient top-k selection (DSA optimization)
-            # Heap maintains k smallest elements; we negate scores for max-heap behavior
+            # DSA Optimization: Use min-heap for efficient top-k selection
+            # Time complexity: O(n log k) vs O(n log n) for full sort
             min_heap = []
+            max_score_seen = float('-inf')
             
-            for result, score in zip(results, scores):
-                # Skip very low scores early (pruning optimization)
+            for i, (result, score) in enumerate(zip(results, scores)):
+                max_score_seen = max(max_score_seen, score)
+                
+                # Aggressive pruning: Skip very low scores
                 if score < self.config.min_score_threshold:
                     continue
                 
@@ -242,16 +246,25 @@ class Reranker:
                 result.similarity = score
                 
                 if len(min_heap) < top_k:
-                    # Heap not full, add directly (negated for max-heap)
-                    heapq.heappush(min_heap, (score, result))
+                    # Heap not full, add directly (with index for tie-breaking)
+                    heapq.heappush(min_heap, (score, i, result))
                 else:
-                    # Heap full, only add if better than worst element
-                    if score > min_heap[0][0]:
-                        heapq.heapreplace(min_heap, (score, result))
+                    # Smart selection: Only add if better than worst element
+                    worst_score = min_heap[0][0]
+                    
+                    # Score gap pruning: If gap between best and worst is large enough,
+                    # and current score is worse than worst, skip it
+                    if len(min_heap) == top_k and max_score_seen - worst_score > self.config.score_gap_threshold:
+                        if score <= worst_score:
+                            continue
+                    
+                    if score > worst_score:
+                        heapq.heapreplace(min_heap, (score, i, result))
             
             # Extract results from heap and sort descending
             # This is O(k log k) instead of O(n log n) for full sort
-            reranked_results = [item[1] for item in sorted(min_heap, key=lambda x: x[0], reverse=True)]
+            # Extract results from heap (index is at position 1, result at position 2)
+            reranked_results = [item[2] for item in sorted(min_heap, key=lambda x: x[0], reverse=True)]
             
             rerank_duration = time.time() - start_time
             
@@ -272,8 +285,10 @@ class Reranker:
                         metrics.reranker_rank_change.observe(original_position)
             
             cache_status = f", cache_hit_rate: {len(scores) - len(results)}/{len(results)}" if self.score_cache else ""
+            pruned_count = len(results) - len(min_heap)
             logger.info(
                 f"Reranking completed in {rerank_duration:.3f}s{cache_status}, "
+                f"returned {len(reranked_results)}/{len(results)} results (pruned {pruned_count}), "
                 f"top score: {reranked_results[0].similarity:.4f}"
             )
             

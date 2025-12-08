@@ -170,5 +170,10 @@ if __name__ == "__main__":
         host=settings.api_host,
         port=settings.api_port,
         reload=True,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
+        workers=1,  # Use 1 worker in dev mode (reload requires single worker)
+        limit_concurrency=100,  # Max concurrent connections
+        limit_max_requests=10000,  # Max requests before worker restart
+        backlog=2048,  # Connection backlog size
+        timeout_keep_alive=30  # Keep-alive timeout
     )

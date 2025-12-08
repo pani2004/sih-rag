@@ -68,6 +68,37 @@ async def get_document(session: AsyncSession, document_id: UUID) -> Optional[Doc
     return result.scalar_one_or_none()
 
 
+async def get_document_by_id(session: AsyncSession, document_id: str) -> Optional[Document]:
+    """
+    Get document by ID (string version for API).
+    
+    Args:
+        session: Database session
+        document_id: Document UUID as string
+        
+    Returns:
+        Document instance or None
+    """
+    return await get_document(session, UUID(document_id))
+
+
+async def get_document_by_source(session: AsyncSession, source: str) -> Optional[Document]:
+    """
+    Get document by source path.
+    
+    Args:
+        session: Database session
+        source: Document source path
+        
+    Returns:
+        Document instance or None
+    """
+    result = await session.execute(
+        select(Document).where(Document.source == source)
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_documents(
     session: AsyncSession,
     limit: int = 100,
@@ -213,6 +244,27 @@ async def get_chunks_by_document(
         .order_by(Chunk.chunk_index)
     )
     return list(result.scalars().all())
+
+
+async def count_chunks_for_document(
+    session: AsyncSession,
+    document_id: int
+) -> int:
+    """
+    Count chunks for a specific document.
+    
+    Args:
+        session: Database session
+        document_id: Document ID (can be int or UUID)
+        
+    Returns:
+        Number of chunks for the document
+    """
+    result = await session.execute(
+        select(func.count(Chunk.id))
+        .where(Chunk.document_id == str(document_id))
+    )
+    return result.scalar_one()
 
 
 # ============================================================================

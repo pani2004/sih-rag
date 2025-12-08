@@ -176,6 +176,15 @@ export const api = {
     return handleResponse(response);
   },
 
+  // Get Document File
+  async getDocumentFile(documentId: string): Promise<Blob> {
+    const response = await fetch(`${API_URL}/documents/${documentId}/file`);
+    if (!response.ok) {
+      throw new APIError(response.statusText, response.status);
+    }
+    return response.blob();
+  },
+
   // Inngest-based chat (for concurrent sessions)
   async sendChatJob(request: ChatRequest, sessionId: string): Promise<{ jobId: string }> {
     const response = await fetch('/api/chat/job', {
@@ -209,6 +218,14 @@ export const api = {
     error?: string;
   }> {
     const response = await fetch(`/api/chat/session/${sessionId}`);
+    return handleResponse(response);
+  },
+
+  // Delete document
+  async deleteDocument(documentId: string): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_URL}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
     return handleResponse(response);
   },
 };

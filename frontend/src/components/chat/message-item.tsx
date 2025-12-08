@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, User, BookOpen } from 'lucide-react';
+import { Sparkles, User, BookOpen, Clock, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
@@ -16,6 +16,9 @@ interface Message {
   content: string;
   citations?: Citation[];
   timestamp?: number;
+  thinkingTime?: number;
+  responseTime?: number;
+  totalTime?: number;
 }
 
 interface MessageItemProps {
@@ -79,12 +82,28 @@ export function MessageItem({ message }: MessageItemProps) {
             </div>
           </div>
           
-          {/* Citations Display */}
-          {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
+          {/* Citations and Timing Display */}
+          {message.role === 'assistant' && (message.citations?.length || message.thinkingTime || message.responseTime) && (
             <div className="mt-2 space-y-1">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground px-2">
-                <BookOpen className="h-3 w-3" />
-                <span>{message.citations.length} source{message.citations.length > 1 ? 's' : ''}</span>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground px-2">
+                {message.citations && message.citations.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="h-3 w-3" />
+                    <span>{message.citations.length} source{message.citations.length > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                {message.thinkingTime && (
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="h-3 w-3" />
+                    <span>Think: {message.thinkingTime}s</span>
+                  </div>
+                )}
+                {message.responseTime && (
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3 w-3" />
+                    <span>Gen: {message.responseTime}s</span>
+                  </div>
+                )}
               </div>
               {message.citations?.map((citation) => {
                 const filename = citation.document_source.split('/').pop() || citation.document_source;

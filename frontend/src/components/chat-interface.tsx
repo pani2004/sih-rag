@@ -15,6 +15,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { EmptyState } from '@/components/chat/empty-state';
 import { MessageItem } from '@/components/chat/message-item';
 import { ThinkingIndicator } from '@/components/chat/thinking-indicator';
+import { ProcessingJobs } from '@/components/chat/processing-jobs';
 
 export function ChatInterface() {
   const [showDocuments, setShowDocuments] = useState(false);
@@ -64,19 +65,13 @@ export function ChatInterface() {
     uploadProgress,
     uploadingFileName,
     isDraggingOver,
+    processingJobs,
     handleFileUpload,
     handleDragEnter,
     handleDragLeave,
     handleDragOver,
     handleDrop,
   } = useFileUpload(currentConversationId || 'default', refetch);
-
-  // Create initial conversation if none exists
-  useEffect(() => {
-    if (conversations.length === 0) {
-      createConversation();
-    }
-  }, []);
 
   // Mobile detection
   useEffect(() => {
@@ -104,8 +99,16 @@ export function ChatInterface() {
   }, [isMobile, showSidebar]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentStreamingMessage]);
+    // Only scroll when message completes (not during streaming)
+    // This allows user to see content stream without page jumping
+    if (!currentStreamingMessage && messages.length > 0) {
+      // Small delay to ensure DOM updates before scroll
+      const timer = setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length]);
 
   return (
     <div className="flex h-screen overflow-hidden relative">
@@ -170,6 +173,15 @@ export function ChatInterface() {
           </div>
         </ScrollArea>
 
+        {/* Processing Jobs Display */}
+        {processingJobs.size > 0 && (
+          <div className="border-t bg-background px-4 py-3">
+            <div className="container max-w-4xl mx-auto">
+              <ProcessingJobs jobs={processingJobs} />
+            </div>
+          </div>
+        )}
+
         {/* Input Area */}
         <ChatInput
           input={input}
@@ -218,7 +230,6 @@ export function ChatInterface() {
         type="file"
         className="hidden"
         onChange={handleFileUpload}
-        disabled={uploading}
         accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac"
       />
     </div>

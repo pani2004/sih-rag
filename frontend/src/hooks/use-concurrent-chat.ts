@@ -135,10 +135,11 @@ export function useConcurrentChat(conversationId: string) {
   const handleSend = async () => {
     if (!input.trim()) return;
     
-    // Allow concurrent processing - don't block if already processing
+    // Don't allow new requests while processing - wait for current one to complete
     if (isProcessing) {
-      console.log('[Concurrent Chat] Already processing in this conversation');
-      // Could show a warning or just allow it
+      console.log('[Concurrent Chat] Already processing in this conversation, please wait');
+      toast.info('Please wait for the current response to complete');
+      return;
     }
 
     const userMessage = { role: 'user' as const, content: input.trim(), timestamp: Date.now() };
@@ -190,6 +191,9 @@ export function useConcurrentChat(conversationId: string) {
       const decoder = new TextDecoder();
       let fullResponse = '';
       let receivedCitations: Citation[] = [];
+      let thinkingTime: number | undefined;
+      let responseTime: number | undefined;
+      let totalTime: number | undefined;
       let buffer = '';
 
       if (reader) {
@@ -215,14 +219,17 @@ export function useConcurrentChat(conversationId: string) {
                 // Handle different message types from backend
                 if (parsed.status === 'citations' && parsed.citations) {
                   receivedCitations = parsed.citations;
+                  thinkingTime = parsed.thinkingTime;
                   setConversationStreaming(conversationId, fullResponse, receivedCitations);
-                  console.log('[Stream] Received citations:', receivedCitations.length);
+                  console.log('[Stream] Received citations:', receivedCitations.length, 'Thinking time:', thinkingTime, 's');
                 } else if (parsed.chunk) {
                   // Streaming content chunks
                   fullResponse += parsed.chunk;
                   setConversationStreaming(conversationId, fullResponse, receivedCitations);
                 } else if (parsed.status === 'done') {
-                  console.log('[Stream] Streaming complete');
+                  responseTime = parsed.responseTime;
+                  totalTime = parsed.totalTime;
+                  console.log('[Stream] Streaming complete - Response time:', responseTime, 's, Total:', totalTime, 's');
                 }
               } catch (e) {
                 // Skip invalid JSON
@@ -240,13 +247,16 @@ export function useConcurrentChat(conversationId: string) {
       }
       setConversationThinking(conversationId, null);
 
-      // Add assistant message
+      // Add assistant message with timing data
       if (fullResponse) {
         addMessage(conversationId, {
           role: 'assistant',
           content: fullResponse,
           citations: receivedCitations.length > 0 ? receivedCitations : undefined,
           timestamp: Date.now(),
+          thinkingTime,
+          responseTime,
+          totalTime,
         });
       }
 

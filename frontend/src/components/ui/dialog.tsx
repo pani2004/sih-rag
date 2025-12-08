@@ -66,24 +66,31 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          // state animations
+          // animations
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          // layout
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 sm:max-w-lg",
-          // modern panel styling
-          "rounded-xl border border-border",
-          "bg-card/95 supports-[backdrop-filter]:bg-card/90",
-          "shadow-2xl",
-          "p-6 duration-200",
+
+          // positioning
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 sm:max-w-lg",
+
+          // visual
+          "rounded-xl border bg-card text-card-foreground shadow-2xl",
+
+          // ✅ height + scrolling control
+          "max-h-[calc(100vh-4rem)] overflow-hidden",
+
           className
         )}
         {...props}
       >
-        {children}
+        {/* ✅ Scrollable padded content */}
+        <div className="overflow-y-auto px-6 py-5 space-y-5 break-words">
+          {children}
+        </div>
+
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="absolute top-4 right-4 rounded-md opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -93,6 +100,7 @@ function DialogContent({
     </DialogPortal>
   )
 }
+
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (

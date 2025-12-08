@@ -25,9 +25,11 @@ class Settings(BaseSettings):
     # Embedding Configuration
     embedding_dimensions: int = 768  
     max_tokens_per_chunk: int = 512
+    embedding_batch_size: int = 25  # Reduced to avoid overwhelming Ollama
+    embedding_batch_delay: float = 0.5  # Delay between batches in seconds
     
     # RAG Configuration
-    top_k_results: int = 10  # Increased to show more sources
+    top_k_results: int = 5  # Optimized for quality over quantity
     similarity_threshold: float = 0.3
     use_hybrid_search: bool = True  # Enable hybrid search (vector + keyword)
     hybrid_vector_weight: float = 0.6  # Weight for vector search in hybrid mode
@@ -36,13 +38,17 @@ class Settings(BaseSettings):
     # Reranker Configuration (Optimized for RTX 3050 Ti)
     reranker_enabled: bool = True  # Enabled with DSA optimizations (LRU cache, heap-based top-k, early stopping)
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    reranker_top_k: int = 50  # Number of candidates to fetch for reranking (increased for more comprehensive results)
+    reranker_top_k: int = 100  # Number of candidates to fetch for reranking (deep dive into all sources)
     reranker_batch_size: int = 128  # Increased for GPU (RTX 3050 Ti has 4GB VRAM)
     reranker_max_length: int = 256  # Reduced max sequence length for faster inference
     reranker_use_cache: bool = True  # Enable LRU cache for repeated query-doc pairs
     reranker_cache_size: int = 200  # Cache capacity (stores ~200 query-doc scores)
     reranker_early_stop_threshold: float = 0.95  # Stop early if score exceeds this
     reranker_min_score_threshold: float = -10.0  # Filter out very low scores
+    reranker_use_gpu: bool = True  # Explicitly use GPU (CUDA) for reranking
+    
+    # Storage Configuration
+    documents_storage_dir: str = "./storage/documents"  # Local storage for uploaded documents
     
     # API Configuration
     api_host: str = "0.0.0.0"

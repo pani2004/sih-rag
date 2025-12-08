@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Sparkles, BarChart3, FileText, PanelLeft, PanelLeftClose } from 'lucide-react';
@@ -24,6 +25,7 @@ export function ChatHeader({
   onNewChat,
   hasMessages,
 }: ChatHeaderProps) {
+  const router = useRouter();
   return (
     <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex-shrink-0">
       <div className="container max-w-4xl mx-auto px-4 py-4">

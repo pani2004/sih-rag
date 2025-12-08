@@ -89,9 +89,11 @@ class DoclingHybridChunker:
         # Initialize tokenizer for token-aware chunking
         # Using bert-base-uncased as a generic tokenizer that works well with most embedding models
         # This avoids mismatch issues when using different embedding models like nomic-embed-text
+        import torch
         model_id = "bert-base-uncased"
-        logger.info(f"Initializing tokenizer: {model_id}")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Initializing tokenizer: {model_id} on device: {device}")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id, device_map=device if device == "cuda" else None)
 
         # Create HybridChunker
         self.chunker = HybridChunker(

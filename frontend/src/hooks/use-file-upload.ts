@@ -5,11 +5,21 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useChatStore } from '@/lib/store';
 
+interface ProcessingJob {
+  jobId: string;
+  fileName: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  result?: any;
+}
+
 export function useFileUpload(conversationId: string, onRefetch: () => void) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingFileName, setUploadingFileName] = useState('');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [processingJobs, setProcessingJobs] = useState<Map<string, ProcessingJob>>(new Map());
 
   const { addMessage } = useChatStore();
 
@@ -18,28 +28,118 @@ export function useFileUpload(conversationId: string, onRefetch: () => void) {
     setUploadProgress(0);
     setUploadingFileName(file.name);
 
-    const uploadStartMessage = {
-      role: 'assistant' as const,
-      content: `📎 Processing **${file.name}**...`,
-    };
-    addMessage(conversationId, uploadStartMessage);
+    // Show toast notification instead of chat message for non-blocking UX
+    toast.info(`Uploading ${file.name}...`);
 
     const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => Math.min(prev + 10, 90));
+      setUploadProgress((prev) => Math.min(prev + 10, 50));
     }, 200);
 
     try {
-      const response = await api.uploadFile(file);
-      setUploadProgress(100);
+      // Step 1: Upload file to backend
+      const uploadResponse = await api.uploadFile(file);
+      setUploadProgress(60);
       
-      const successMessage = {
-        role: 'assistant' as const,
-        content: `✅ Successfully uploaded and processed **${file.name}**!\n\n📊 Created ${response.chunks_created} searchable chunks.\n\nYou can now ask questions about this document.`,
-      };
-      addMessage(conversationId, successMessage);
+      toast.success(`${file.name} uploaded! Processing in background...`);
+
+      // Step 2: Create background job via Inngest
+      if (!uploadResponse.document_id) {
+        throw new Error('No document ID returned from upload');
+      }
+
+      const jobResponse = await fetch('/api/documents/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: uploadResponse.document_id,
+          fileName: file.name,
+          filePath: uploadResponse.filename,
+        }),
+      });
+
+      if (!jobResponse.ok) {
+        throw new Error('Failed to create processing job');
+      }
+
+      const { jobId } = await jobResponse.json();
       
-      toast.success('Document processed successfully!');
-      onRefetch();
+      toast.success(`📄 ${file.name} uploaded! Processing in background...`, { duration: 4000 });
+      
+      // Reset upload state immediately to allow more uploads and chatting
+      setUploading(false);
+      setUploadProgress(0);
+      setUploadingFileName('');
+      
+      // Add initial processing job to the Map
+      setProcessingJobs(prev => new Map(prev).set(jobId, {
+        jobId,
+        fileName: file.name,
+        status: 'pending',
+        progress: 0,
+        message: 'Starting...',
+      }));
+      
+      // Step 3: Poll for job completion with real-time progress (non-blocking)
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/documents/job/${jobId}`);
+          if (!statusResponse.ok) return;
+
+          const jobStatus = await statusResponse.json();
+          
+          // Update processing job in real-time
+          setProcessingJobs(prev => new Map(prev).set(jobId, {
+            jobId,
+            fileName: file.name,
+            status: jobStatus.status,
+            progress: jobStatus.progress || 0,
+            message: jobStatus.message || '',
+            result: jobStatus.result,
+          }));
+          
+          if (jobStatus.status === 'completed') {
+            clearInterval(pollInterval);
+            
+            // Update UI in real-time when processing completes
+            toast.success(
+              `✅ ${file.name} ready! Created ${jobStatus.result?.chunks_created || 'multiple'} chunks.`,
+              { duration: 5000 }
+            );
+            
+            // Remove from processing jobs after 3 seconds
+            setTimeout(() => {
+              setProcessingJobs(prev => {
+                const updated = new Map(prev);
+                updated.delete(jobId);
+                return updated;
+              });
+            }, 3000);
+            
+            // Refetch documents immediately to show updated list
+            await onRefetch();
+          } else if (jobStatus.status === 'failed') {
+            clearInterval(pollInterval);
+            toast.error(`❌ ${file.name} processing failed: ${jobStatus.message || 'Unknown error'}`, { duration: 5000 });
+            
+            // Remove from processing jobs after 5 seconds
+            setTimeout(() => {
+              setProcessingJobs(prev => {
+                const updated = new Map(prev);
+                updated.delete(jobId);
+                return updated;
+              });
+            }, 5000);
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      // Cleanup polling after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 300000);
+
     } catch (error: any) {
       const errorMessage = {
         role: 'assistant' as const,
@@ -47,11 +147,12 @@ export function useFileUpload(conversationId: string, onRefetch: () => void) {
       };
       addMessage(conversationId, errorMessage);
       toast.error(`Upload failed: ${error.message}`);
-    } finally {
-      clearInterval(progressInterval);
+      
       setUploading(false);
       setUploadProgress(0);
       setUploadingFileName('');
+    } finally {
+      clearInterval(progressInterval);
     }
   };
 
@@ -117,6 +218,7 @@ export function useFileUpload(conversationId: string, onRefetch: () => void) {
     uploadProgress,
     uploadingFileName,
     isDraggingOver,
+    processingJobs,
     handleFileUpload,
     handleDragEnter,
     handleDragLeave,

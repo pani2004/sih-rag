@@ -1,10 +1,15 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Hash, Calendar, BarChart } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FileText, Hash, Calendar, BarChart, Eye, Loader2 } from 'lucide-react';
+import { FileViewer } from './file-viewer';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 import type { Citation } from '@/lib/types';
 
 interface CitationViewerProps {
@@ -14,12 +19,46 @@ interface CitationViewerProps {
 }
 
 export function CitationViewer({ citation, open, onOpenChange }: CitationViewerProps) {
+  const [documentFileUrl, setDocumentFileUrl] = useState<string | null>(null);
+  const [loadingFile, setLoadingFile] = useState(false);
+  const [fileType, setFileType] = useState<string>('');
+
+  // Load document file when citation changes
+  useEffect(() => {
+    if (citation?.document_id && open) {
+      setLoadingFile(true);
+      setDocumentFileUrl(null);
+      
+      api.getDocumentFile(citation.document_id.toString())
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          setDocumentFileUrl(url);
+          setFileType(blob.type);
+          setLoadingFile(false);
+        })
+        .catch((error) => {
+          console.error('Failed to load document file:', error);
+          setLoadingFile(false);
+        });
+    }
+
+    // Cleanup object URL on unmount or citation change
+    return () => {
+      if (documentFileUrl) {
+        URL.revokeObjectURL(documentFileUrl);
+      }
+    };
+  }, [citation?.document_id, open]);
+
   if (!citation) return null;
+
+  const pageNumber = citation.metadata?.page || 1;
+  const canPreview = documentFileUrl && (fileType === 'application/pdf' || fileType.startsWith('text/') || fileType.startsWith('audio/'));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* bg-background ensures proper light/dark mode behavior */}
-      <DialogContent className="max-w-3xl max-h-[80vh] bg-background text-foreground">
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col bg-background text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -27,9 +66,25 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
           </DialogTitle>
         </DialogHeader>
 
-        {/* ScrollArea also gets background to ensure visual consistency */}
-        <ScrollArea className="max-h-[60vh] bg-background">
-          <div className="space-y-6 pr-4">
+        <Tabs defaultValue="content" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="content" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Content
+            </TabsTrigger>
+            <TabsTrigger value="page" disabled={!canPreview || loadingFile} className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Page View
+            </TabsTrigger>
+            <TabsTrigger value="metadata" className="flex items-center gap-2">
+              <Hash className="h-4 w-4" />
+              Metadata
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="content" className="flex-1 min-h-0 mt-4">
+            <ScrollArea className="h-full bg-background">
+              <div className="space-y-6 pr-4">
 
             {/* Document Info */}
             <div className="space-y-3">
@@ -67,27 +122,48 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
 
             <Separator />
 
-            {/* Content */}
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                Content
-              </h4>
-
-              {/* Enhanced visibility with border and better contrast */}
-              <div className="rounded-lg bg-muted/80 border border-border p-4 shadow-sm">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                  {citation.content}
-                </p>
-              </div>
+            {/* Content Display */}
+            <div className="rounded-lg bg-muted/80 border border-border p-4 shadow-sm">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                {citation.content}
+              </p>
             </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
 
-            {/* Additional Metadata */}
-            {citation.metadata && Object.keys(citation.metadata).length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-2">
+          <TabsContent value="page" className="flex-1 min-h-0 mt-4">
+            {loadingFile ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Loading document...</span>
+                </div>
+              </div>
+            ) : documentFileUrl && canPreview ? (
+              <FileViewer 
+                fileUrl={documentFileUrl} 
+                fileName={citation.document_title}
+                fileType={fileType}
+                initialPage={pageNumber} 
+                className="h-full" 
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
+                <FileText className="h-12 w-12" />
+                <p>Preview not available for this file type</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="metadata" className="flex-1 min-h-0 mt-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-6 pr-4">
+              {/* Additional Metadata */}
+              {citation.metadata && Object.keys(citation.metadata).length > 0 && (
+                <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Metadata
+                    Chunk Metadata
                   </h4>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -103,6 +179,18 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
                         <p className="text-sm font-medium">{citation.metadata.total_chunks}</p>
                       </div>
                     )}
+                    {citation.metadata.page && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Page Number</span>
+                        <p className="text-sm font-medium">{citation.metadata.page}</p>
+                      </div>
+                    )}
+                    {citation.metadata.token_count && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Token Count</span>
+                        <p className="text-sm font-medium">{citation.metadata.token_count}</p>
+                      </div>
+                    )}
                     {citation.metadata.uploaded && (
                       <div>
                         <span className="text-xs text-muted-foreground">Status</span>
@@ -113,30 +201,30 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
                     )}
                   </div>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* IDs */}
-            <Separator />
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                Identifiers
-              </h4>
+              {/* IDs */}
+              <Separator />
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  Identifiers
+                </h4>
 
-              <div className="space-y-2 text-xs font-mono">
-                <div>
-                  <span className="text-muted-foreground">Document ID:</span>
-                  <p className="break-all">{citation.document_id}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Chunk ID:</span>
-                  <p className="break-all">{citation.chunk_id}</p>
+                <div className="space-y-2 text-xs font-mono">
+                  <div>
+                    <span className="text-muted-foreground">Document ID:</span>
+                    <p className="break-all">{citation.document_id}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Chunk ID:</span>
+                    <p className="break-all">{citation.chunk_id}</p>
+                  </div>
                 </div>
               </div>
             </div>
-
-          </div>
-        </ScrollArea>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

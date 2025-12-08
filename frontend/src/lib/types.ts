@@ -15,6 +15,9 @@ export interface ChatMessage {
   content: string;
   citations?: Citation[];
   timestamp?: number;
+  thinkingTime?: number;  // Time to search and find chunks (seconds)
+  responseTime?: number;  // Time to generate response (seconds)
+  totalTime?: number;     // Total time (seconds)
 }
 
 export interface ChatRequest {

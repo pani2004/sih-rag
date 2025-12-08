@@ -6,6 +6,7 @@ Handles all communication with the Ollama API.
 import httpx
 import json
 import logging
+import asyncio
 from typing import List, AsyncGenerator, Optional, Dict, Any
 
 from backend.config import settings
@@ -14,14 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
-    """Client for interacting with Ollama API."""
+    """Client for interacting with Ollama API with connection pooling."""
     
     def __init__(
         self,
         base_url: Optional[str] = None,
         llm_model: Optional[str] = None,
         embedding_model: Optional[str] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        max_connections: int = 100,
+        max_keepalive_connections: int = 20
     ):
         """
         Initialize Ollama client.
@@ -31,46 +34,78 @@ class OllamaClient:
             llm_model: LLM model name (defaults to settings)
             embedding_model: Embedding model name (defaults to settings)
             timeout: Request timeout in seconds (defaults to settings)
+            max_connections: Maximum number of concurrent connections
+            max_keepalive_connections: Maximum number of keepalive connections
         """
         self.base_url = (base_url or settings.ollama_base_url).rstrip('/')
         self.llm_model = llm_model or settings.ollama_llm_model
         self.embedding_model = embedding_model or settings.ollama_embedding_model
         self.timeout = timeout or settings.ollama_timeout
         
+        # Connection pool limits for better concurrent performance
+        self.limits = httpx.Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections
+        )
+        
+        # Semaphore to limit concurrent embedding requests
+        self._embedding_semaphore = asyncio.Semaphore(50)
+        
         logger.info(
             f"Initialized OllamaClient: {self.base_url}, "
-            f"LLM={self.llm_model}, Embeddings={self.embedding_model}"
+            f"LLM={self.llm_model}, Embeddings={self.embedding_model}, "
+            f"Max connections={max_connections}"
         )
     
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str, max_retries: int = 3) -> List[float]:
         """
-        Generate embedding for a single text using Ollama.
+        Generate embedding for a single text using Ollama with retry logic.
         
         Args:
             text: Text to embed
+            max_retries: Maximum number of retry attempts
             
         Returns:
             Embedding vector as list of floats
         """
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/api/embeddings",
-                    json={
-                        "model": self.embedding_model,
-                        "prompt": text
-                    }
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["embedding"]
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Ollama embedding API error: {e.response.status_code} - {e.response.text}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}")
-            raise
+        last_error = None
+        
+        async with self._embedding_semaphore:
+            for attempt in range(max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, limits=self.limits) as client:
+                        response = await client.post(
+                            f"{self.base_url}/api/embeddings",
+                            json={
+                                "model": self.embedding_model,
+                                "prompt": text
+                            }
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        return data["embedding"]
+                        
+                except (httpx.HTTPStatusError, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 2^attempt seconds (2s, 4s, 8s)
+                        wait_time = 2 ** attempt
+                        logger.warning(
+                            f"Ollama embedding error (attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Retrying in {wait_time}s..."
+                        )
+                        await asyncio.sleep(wait_time)
+                    else:
+                        if isinstance(e, httpx.HTTPStatusError):
+                            logger.error(f"Ollama embedding API error: {e.response.status_code} - {e.response.text}")
+                        else:
+                            logger.error(f"Ollama connection error: {e}")
+                except Exception as e:
+                    logger.error(f"Failed to generate embedding: {e}")
+                    raise
+            
+            # If we exhausted all retries
+            raise last_error if last_error else Exception("Failed to generate embedding after retries")
     
     async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """

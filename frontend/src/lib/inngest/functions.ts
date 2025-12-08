@@ -3,6 +3,15 @@ import type { ChatMessage } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+interface DocumentEvent {
+  data: {
+    jobId: string;
+    documentId: string;
+    fileName: string;
+    filePath: string;
+  };
+}
+
 interface ChatEvent {
   data: {
     sessionId: string;
@@ -129,5 +138,184 @@ export const processChatMessageFunction = inngest.createFunction(
       responseLength: chatResponse.response.length,
       citationsCount: chatResponse.citations.length,
     };
+  }
+);
+
+// Document processing function for background embedding
+export const processDocumentFunction = inngest.createFunction(
+  { 
+    id: "process-document",
+    concurrency: {
+      limit: 5, // Allow 5 concurrent document processing jobs
+    },
+  },
+  { event: "document/uploaded" },
+  async ({ event, step }) => {
+    const { jobId, documentId, fileName, filePath } = event.data;
+
+    console.log(`[Inngest] 📄 Starting document processing`);
+    console.log(`[Inngest]   - Document ID: ${documentId}`);
+    console.log(`[Inngest]   - File: ${fileName}`);
+    console.log(`[Inngest]   - Job ID: ${jobId}`);
+
+    try {
+      // Step 1: Update job status to processing
+      await step.run("update-status-processing", async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        
+        await fetch(`${baseUrl}/api/documents/job/${jobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'processing',
+            message: 'Starting document processing...',
+            progress: 10,
+          }),
+        });
+
+        console.log(`[Inngest] ✓ Job ${jobId} status: processing`);
+      });
+
+      // Step 2a: Notify starting chunking phase
+      await step.run("update-status-chunking", async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        
+        console.log(`[Inngest] 🔍 Phase 1/3: Reading and chunking document`);
+        
+        await fetch(`${baseUrl}/api/documents/job/${jobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'processing',
+            message: 'Reading document and creating chunks...',
+            progress: 25,
+          }),
+        });
+
+        console.log(`[Inngest] ✓ Job ${jobId} - chunking phase started`);
+      });
+
+      // Step 2b: Process document through ingestion pipeline
+      const ingestionResult = await step.run("ingest-document", async () => {
+        console.log(`[Inngest] 🔄 Phase 2/3: Processing document through pipeline`);
+        console.log(`[Inngest]   - Calling backend /ingest-by-id endpoint`);
+        
+        const response = await fetch(`${API_URL}/ingest-by-id`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            document_id: documentId,  // Send as string (UUID)
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[Inngest] ❌ Ingestion failed: ${response.statusText}`);
+          console.error(`[Inngest]   Error details: ${errorText}`);
+          throw new Error(`Ingestion failed: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[Inngest] ✅ Chunking completed!`);
+        console.log(`[Inngest]   - Total chunks created: ${data.chunks_created || 0}`);
+        console.log(`[Inngest]   - Status: ${data.status}`);
+        
+        return data;
+      });
+
+      // Step 2c: Notify embedding phase
+      await step.run("update-status-embedding", async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        const chunkCount = ingestionResult.chunks_created || 0;
+        
+        console.log(`[Inngest] ⚡ Phase 3/3: Generating vector embeddings`);
+        console.log(`[Inngest]   - Processing ${chunkCount} chunks in parallel`);
+        console.log(`[Inngest]   - Using optimized batch processing`);
+        
+        await fetch(`${baseUrl}/api/documents/job/${jobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'processing',
+            message: `Generating embeddings for ${chunkCount} chunks (parallel processing)...`,
+            progress: 50,
+          }),
+        });
+
+        console.log(`[Inngest] ✓ Embedding phase in progress...`);
+      });
+
+      // Step 3: Update job status to completed
+      await step.run("update-status-completed", async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        const chunkCount = ingestionResult.chunks_created || 0;
+        
+        console.log(`[Inngest] 🎉 Processing completed successfully!`);
+        console.log(`[Inngest]   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`[Inngest]   📊 Summary:`);
+        console.log(`[Inngest]      • File: ${fileName}`);
+        console.log(`[Inngest]      • Chunks created: ${chunkCount}`);
+        console.log(`[Inngest]      • Embeddings generated: ${chunkCount}`);
+        console.log(`[Inngest]      • Status: Ready for queries`);
+        console.log(`[Inngest]   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        
+        await fetch(`${baseUrl}/api/documents/job/${jobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'completed',
+            message: `✅ Successfully processed: ${chunkCount} chunks created and embedded`,
+            progress: 100,
+            result: ingestionResult,
+          }),
+        });
+
+        console.log(`[Inngest] ✓ Job ${jobId} marked as completed`);
+      });
+
+      // Step 4: Send completion event
+      await step.sendEvent("send-document-completion", {
+        name: "document/processed",
+        data: {
+          jobId,
+          documentId,
+          fileName,
+          success: true,
+          chunksCreated: ingestionResult.chunks_created,
+        },
+      });
+
+      console.log(`[Inngest] Document ${documentId} processing completed`);
+
+      return {
+        success: true,
+        jobId,
+        documentId,
+        chunksCreated: ingestionResult.chunks_created,
+      };
+
+    } catch (error: any) {
+      console.error(`[Inngest] ❌ ERROR: Document processing failed`);
+      console.error(`[Inngest]   - Document: ${fileName}`);
+      console.error(`[Inngest]   - Error: ${error.message}`);
+      console.error(`[Inngest]   - Stack:`, error.stack);
+
+      // Update job status to failed
+      await step.run("update-status-failed", async () => {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        
+        await fetch(`${baseUrl}/api/documents/job/${jobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'failed',
+            message: error.message || 'Document processing failed',
+            error: error.toString(),
+          }),
+        });
+      });
+
+      throw error;
+    }
   }
 );

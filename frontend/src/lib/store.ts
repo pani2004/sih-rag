@@ -77,6 +77,7 @@ export const useChatStore = create<ChatStore>()(
           currentConversationId: id,
         }));
         console.log(`[Store] Created new conversation: ${id}`);
+        return id; // Return ID for routing
       },
       
       deleteConversation: (id) => {

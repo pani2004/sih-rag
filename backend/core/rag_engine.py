@@ -109,8 +109,10 @@ Provide a detailed, well-explained answer that covers all relevant aspects from 
         
         # Determine how many candidates to fetch (more if reranking)
         fetch_limit = limit or settings.top_k_results
-        if self.use_reranker and settings.reranker_top_k > fetch_limit:
-            fetch_limit = settings.reranker_top_k
+        if self.use_reranker:
+            # Fetch more candidates for reranking to deep dive into sources
+            candidate_count = settings.reranker_top_k
+            fetch_limit = max(fetch_limit, candidate_count)
         
         # Search vector database
         if should_use_hybrid:

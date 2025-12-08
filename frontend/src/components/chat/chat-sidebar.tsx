@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,8 +41,9 @@ export function ChatSidebar({
   onWidthChange,
   isMobile,
 }: ChatSidebarProps) {
-  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
+  const router = useRouter();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const [isResizing, setIsResizing] = useState(false);
 
   return (
@@ -85,7 +87,7 @@ export function ChatSidebar({
             <ScrollArea className="flex-1 overflow-y-auto">
               <div className="p-2 space-y-1">
                 {conversations.map((conv) => {
-                  const isEditing = editingConversationId === conv.id;
+                  const isEditing = editingId === conv.id;
                   const isActive = currentConversationId === conv.id;
 
                   return (
@@ -94,24 +96,27 @@ export function ChatSidebar({
                       className={`group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors
                         ${isActive ? "bg-muted" : "hover:bg-muted/70"}`}
                       onClick={() => {
-                        if (!isEditing) onSelectConversation(conv.id);
+                        if (!isEditing) {
+                          onSelectConversation(conv.id);
+                          router.push(`/${conv.id}`);
+                        }
                       }}
                     >
-                      <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
                         {isEditing ? (
                           <input
                             className="w-full text-sm bg-background border border-border rounded px-2 py-1"
-                            value={editingTitle}
+                            value={editTitle}
                             autoFocus
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onChange={(e) => setEditTitle(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                onRenameConversation(conv.id, editingTitle);
-                                setEditingConversationId(null);
+                                onRenameConversation(conv.id, editTitle);
+                                setEditingId(null);
                               }
-                              if (e.key === "Escape") setEditingConversationId(null);
+                              if (e.key === "Escape") setEditingId(null);
                             }}
                           />
                         ) : (
@@ -131,8 +136,8 @@ export function ChatSidebar({
                             className="h-6 w-6"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingConversationId(conv.id);
-                              setEditingTitle(conv.title);
+                              setEditingId(conv.id);
+                              setEditTitle(conv.title);
                             }}
                           >
                             <Edit2 className="h-3 w-3" />
@@ -156,8 +161,8 @@ export function ChatSidebar({
                           className="h-6 w-6"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onRenameConversation(conv.id, editingTitle);
-                            setEditingConversationId(null);
+                            onRenameConversation(conv.id, editTitle);
+                            setEditingId(null);
                           }}
                         >
                           <Check className="h-3 w-3" />

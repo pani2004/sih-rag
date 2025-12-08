@@ -69,7 +69,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             placeholder="Message RAG Assistant..."
             className="min-h-[60px] pr-24 resize-none rounded-2xl"
-            disabled={isStreaming || uploading || disabled}
+            disabled={isStreaming || disabled}
           />
           <div className="absolute right-2 bottom-2 flex gap-2">
             <input
@@ -77,7 +77,6 @@ export function ChatInput({
               type="file"
               className="hidden"
               onChange={onFileUpload}
-              disabled={uploading}
               accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac"
             />
             <Button
@@ -85,7 +84,6 @@ export function ChatInput({
               size="icon"
               className="h-8 w-8 rounded-lg"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
             >
               <Paperclip className="h-4 w-4" />
             </Button>
@@ -101,7 +99,7 @@ export function ChatInput({
             ) : (
               <Button
                 onClick={onSend}
-                disabled={!input.trim() || uploading || disabled}
+                disabled={!input.trim() || disabled}
                 size="icon"
                 className="h-8 w-8 rounded-lg"
               >

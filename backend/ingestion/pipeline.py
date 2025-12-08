@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from docling.document_converter import DocumentConverter, AudioFormatOption
-from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import DocumentConverter, AudioFormatOption, PdfFormatOption
+from docling.datamodel.pipeline_options import AsrPipelineOptions, PdfPipelineOptions
 from docling.datamodel import asr_model_specs
 from docling.datamodel.base_models import InputFormat
 from docling.pipeline.asr_pipeline import AsrPipeline
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 
 from backend.config import settings
 from backend.database.connection import db_manager, get_db_session
@@ -73,8 +74,8 @@ class IngestionPipeline:
         )
         self.chunker = create_chunker(chunker_config)
         
-        # Initialize embedder
-        self.embedder = OllamaEmbedder()
+        # Initialize embedder with configurable batch size
+        self.embedder = OllamaEmbedder(batch_size=settings.embedding_batch_size)
     
     def _find_document_files(self) -> List[str]:
         """Find all supported document files."""
@@ -128,12 +129,31 @@ class IngestionPipeline:
         if file_ext in docling_formats:
             try:
                 logger.info(f"Converting {file_ext} file using Docling: {os.path.basename(file_path)}")
-                converter = DocumentConverter()
-                result = converter.convert(file_path)
-                markdown_content = result.document.export_to_markdown()
-                logger.info(f"Successfully converted {os.path.basename(file_path)}")
                 
-                return (markdown_content, result.document)
+                # Use default converter - Docling will handle optimization automatically
+                converter = DocumentConverter()
+                
+                logger.info(f"Starting document conversion...")
+                result = converter.convert(file_path)
+                
+                # Try both export methods and use the one with more content
+                markdown_content = result.document.export_to_markdown()
+                text_content = result.document.export_to_text()
+                
+                # Use whichever has more content (sometimes markdown export fails)
+                if len(text_content) > len(markdown_content):
+                    logger.info(f"Using text export (more content than markdown)")
+                    final_content = text_content
+                else:
+                    final_content = markdown_content
+                
+                # Log content stats to verify extraction
+                logger.info(f"Successfully converted {os.path.basename(file_path)}")
+                logger.info(f"  - Markdown export: {len(markdown_content)} characters")
+                logger.info(f"  - Text export: {len(text_content)} characters")
+                logger.info(f"  - Using: {'text' if len(text_content) > len(markdown_content) else 'markdown'}")
+                
+                return (final_content, result.document)
                 
             except Exception as e:
                 logger.error(f"Failed to convert {file_path} with Docling: {e}")
@@ -162,8 +182,12 @@ class IngestionPipeline:
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
             
+            # Use CPU-only mode for audio transcription (faster initialization)
+            logger.info(f"Audio transcription using CPU (faster initialization)")
+            
             pipeline_options = AsrPipelineOptions()
             pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+            # No GPU configuration - let Docling use CPU by default
             
             converter = DocumentConverter(
                 format_options={
@@ -217,6 +241,18 @@ class IngestionPipeline:
         title = self._extract_title(content, file_path)
         source = os.path.relpath(file_path, self.documents_folder)
         
+        # Check if document already exists with embeddings
+        from backend.database.operations import get_document_by_source
+        existing_doc = await get_document_by_source(session, source)
+        if existing_doc and existing_doc.chunk_count and existing_doc.chunk_count > 0:
+            logger.info(f"Skipping {title} - already processed with {existing_doc.chunk_count} chunks")
+            return {
+                "title": title,
+                "chunks_created": existing_doc.chunk_count,
+                "success": True,
+                "skipped": True
+            }
+        
         logger.info(f"Processing: {title}")
         
         # Chunk document
@@ -239,8 +275,11 @@ class IngestionPipeline:
         
         logger.info(f"Created {len(chunks)} chunks")
         
-        # Generate embeddings
-        embedded_chunks = await self.embedder.embed_chunks(chunks)
+        # Generate embeddings with configured batch delay
+        embedded_chunks = await self.embedder.embed_chunks(
+            chunks, 
+            batch_delay=settings.embedding_batch_delay
+        )
         logger.info(f"Generated embeddings for {len(embedded_chunks)} chunks")
         
         # Save to database
