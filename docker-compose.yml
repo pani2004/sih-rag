@@ -49,10 +49,24 @@ services:
     container_name: rag_frontend
     depends_on:
       - backend
+      - inngest
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-local}
+      INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY:-signkey-prod-local}
+      NEXT_PUBLIC_INNGEST_ENV: ${INNGEST_ENV:-local}
     ports:
       - "3000:3000"
+    restart: unless-stopped
+
+  # Inngest Dev Server
+  inngest:
+    image: inngest/inngest:latest
+    container_name: rag_inngest
+    ports:
+      - "8288:8288"
+    environment:
+      INNGEST_DEV: "1"
     restart: unless-stopped
 
   # Document Ingestion (run manually)

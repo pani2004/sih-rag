@@ -119,7 +119,7 @@ OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 #### 3. Start All Services
 
 ```bash
-# Start all services (PostgreSQL + Backend + Frontend)
+# Start all services (PostgreSQL + Backend + Frontend + Inngest)
 docker compose up -d
 
 # Check logs
@@ -134,6 +134,7 @@ docker compose ps
 - 🔌 **Backend API**: http://localhost:8000
 - 📚 **API Docs**: http://localhost:8000/docs
 - ❤️ **Health Check**: http://localhost:8000/health
+- 🔄 **Inngest Dev Server**: http://localhost:8288
 
 #### 4. Upload Documents
 
@@ -248,7 +249,32 @@ Frontend at http://localhost:3000, Backend at http://localhost:8000
 - **postgres** - PostgreSQL 15 with PGVector extension (port 5433)
 - **backend** - FastAPI application with hot-reload (port 8000)
 - **frontend** - Next.js application (port 3000)
+- **inngest** - Background job processing and event orchestration (port 8288)
 - **ingestion** - One-time batch document processing (profile: ingestion)
+
+### 🔄 Inngest Integration
+
+Inngest handles background processing for document uploads and chat processing:
+
+**What it does:**
+- ✅ Asynchronous document processing (chunking, embedding generation)
+- ✅ Background chat message handling
+- ✅ Event-driven architecture for reliable job processing
+- ✅ Automatic retries and error handling
+- ✅ Real-time progress tracking
+
+**Access the Inngest Dev Server:**
+- Navigate to http://localhost:8288
+- View running functions, events, and execution logs
+- Monitor background jobs and their status
+
+**Configuration:**
+Environment variables in `.env`:
+```env
+INNGEST_EVENT_KEY=local
+INNGEST_SIGNING_KEY=signkey-prod-local
+INNGEST_ENV=local
+```
 
 ### Docker Commands
 
