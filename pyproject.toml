@@ -29,6 +29,9 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=6.0.0",
     "python-json-logger>=2.0.0",
     "sentence-transformers>=2.2.0",
+    "paddleocr>=3.3.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
 ]
 
 [tool.setuptools]

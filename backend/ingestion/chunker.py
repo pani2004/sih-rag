@@ -217,6 +217,12 @@ class DoclingHybridChunker:
                 current_pos = end_char
 
             logger.info(f"Created {len(document_chunks)} chunks using HybridChunker")
+            
+            # If no chunks were created, fall back to simple chunking
+            if len(document_chunks) == 0 and content.strip():
+                logger.warning("HybridChunker produced 0 chunks, falling back to simple chunking")
+                return self._simple_fallback_chunk(content, base_metadata)
+            
             return document_chunks
 
         except Exception as e:

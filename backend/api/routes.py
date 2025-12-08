@@ -552,6 +552,13 @@ async def get_document_file(
             '.wav': 'audio/wav',
             '.m4a': 'audio/mp4',
             '.flac': 'audio/flac',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.tiff': 'image/tiff',
+            '.tif': 'image/tiff',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp',
         }
         media_type = media_types.get(suffix, 'application/octet-stream')
         
@@ -893,17 +900,19 @@ async def delete_document_endpoint(
 
 @router.post("/upload", response_model=FileUploadResponse, tags=["Documents"])
 async def upload_file(
-    file: UploadFile = File(..., description="File to upload (PDF, DOCX, PPTX, XLSX, MD, TXT, MP3, WAV, M4A, FLAC)")
+    file: UploadFile = File(..., description="File to upload (PDF, DOCX, PPTX, XLSX, MD, TXT, MP3, WAV, M4A, FLAC, JPG, PNG, JPEG, TIFF, BMP, WEBP)")
 ):
     """
     Upload a single file and ingest it into the knowledge base.
     
-    Supports: PDF, DOCX, PPTX, XLSX, MD, TXT, MP3, WAV, M4A, FLAC
+    Supports: PDF, DOCX, PPTX, XLSX, MD, TXT, MP3, WAV, M4A, FLAC, JPG, PNG, JPEG, TIFF, BMP, WEBP
+    Images (JPG, PNG, etc.) will be processed with OCR for text extraction.
     """
     # Validate file extension
     supported_extensions = {
         '.pdf', '.docx', '.pptx', '.xlsx', '.xls',
-        '.md', '.txt', '.mp3', '.wav', '.m4a', '.flac'
+        '.md', '.txt', '.mp3', '.wav', '.m4a', '.flac',
+        '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.webp'
     }
     
     file_ext = os.path.splitext(file.filename)[1].lower()

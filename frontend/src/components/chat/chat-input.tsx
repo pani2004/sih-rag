@@ -77,7 +77,7 @@ export function ChatInput({
               type="file"
               className="hidden"
               onChange={onFileUpload}
-              accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac"
+              accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp"
             />
             <Button
               variant="ghost"

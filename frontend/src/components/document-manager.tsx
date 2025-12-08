@@ -62,7 +62,7 @@ export function DocumentManager() {
                 className="hidden"
                 onChange={handleFileUpload}
                 disabled={uploading}
-                accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac"
+                accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp"
               />
               <label htmlFor="file-upload" className="flex-1">
                 <Button

@@ -53,7 +53,7 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
   if (!citation) return null;
 
   const pageNumber = citation.metadata?.page || 1;
-  const canPreview = documentFileUrl && (fileType === 'application/pdf' || fileType.startsWith('text/') || fileType.startsWith('audio/'));
+  const canPreview = documentFileUrl && (fileType === 'application/pdf' || fileType.startsWith('text/') || fileType.startsWith('audio/') || fileType.startsWith('image/'));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

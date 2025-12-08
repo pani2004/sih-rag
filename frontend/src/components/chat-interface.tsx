@@ -230,7 +230,7 @@ export function ChatInterface() {
         type="file"
         className="hidden"
         onChange={handleFileUpload}
-        accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac"
+        accept=".pdf,.docx,.pptx,.xlsx,.md,.txt,.mp3,.wav,.m4a,.flac,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp"
       />
     </div>
   );

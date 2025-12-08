@@ -14,7 +14,7 @@ from typing import List, Optional, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from docling.document_converter import DocumentConverter, AudioFormatOption, PdfFormatOption
-from docling.datamodel.pipeline_options import AsrPipelineOptions, PdfPipelineOptions
+from docling.datamodel.pipeline_options import AsrPipelineOptions, PdfPipelineOptions, TesseractOcrOptions
 from docling.datamodel import asr_model_specs
 from docling.datamodel.base_models import InputFormat
 from docling.pipeline.asr_pipeline import AsrPipeline
@@ -104,7 +104,8 @@ class IngestionPipeline:
             "*.pptx", "*.ppt", 
             "*.xlsx", "*.xls", 
             "*.html", "*.htm",  
-            "*.mp3", "*.wav", "*.m4a", "*.flac", 
+            "*.mp3", "*.wav", "*.m4a", "*.flac",
+            "*.jpg", "*.jpeg", "*.png", "*.tiff", "*.tif", "*.bmp", "*.webp",
         ]
         
         files = []
@@ -130,6 +131,12 @@ class IngestionPipeline:
         """
         file_ext = os.path.splitext(file_path)[1].lower()
         
+        # Image formats - extract text with OCR
+        image_formats = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.webp']
+        if file_ext in image_formats:
+            content = self._extract_text_from_image(file_path)
+            return (content, None)
+        
         # Audio formats - transcribe with Whisper
         audio_formats = ['.mp3', '.wav', '.m4a', '.flac']
         if file_ext in audio_formats:
@@ -143,7 +150,7 @@ class IngestionPipeline:
             try:
                 logger.info(f"Converting {file_ext} file using Docling: {os.path.basename(file_path)}")
                 
-                # Use default converter - Docling will handle optimization automatically
+                # Use default converter - let Docling decide if OCR is needed
                 converter = DocumentConverter()
                 
                 logger.info(f"Starting document conversion...")
@@ -155,15 +162,68 @@ class IngestionPipeline:
                 
                 # Use whichever has more content (sometimes markdown export fails)
                 if len(text_content) > len(markdown_content):
-                    logger.info(f"Using text export (more content than markdown)")
                     final_content = text_content
                 else:
                     final_content = markdown_content
+                
+                # Log document structure for debugging (safely)
+                try:
+                    logger.info(f"Document structure:")
+                    logger.info(f"  - Pages: {len(result.document.pages)}")
+                    if hasattr(result.document, 'body'):
+                        if hasattr(result.document.body, 'elements'):
+                            logger.info(f"  - Elements: {len(result.document.body.elements)}")
+                        else:
+                            logger.info(f"  - Body type: {type(result.document.body).__name__}")
+                except Exception as e:
+                    logger.debug(f"Could not log document structure: {e}")
+                
+                # Check if content extraction was successful
+                # If very little content was extracted, try OCR as fallback
+                if len(final_content.strip()) < 50 and file_ext == '.pdf':
+                    logger.warning(f"Very little content extracted ({len(final_content)} chars), trying OCR fallback...")
+                    
+                    try:
+                        # Retry with forced OCR using Tesseract
+                        pipeline_options = PdfPipelineOptions()
+                        pipeline_options.do_ocr = True
+                        pipeline_options.do_table_structure = True
+                        pipeline_options.ocr_options = TesseractOcrOptions()  # Force Tesseract
+                        
+                        ocr_converter = DocumentConverter(
+                            format_options={
+                                InputFormat.PDF: PdfFormatOption(
+                                    pipeline_options=pipeline_options
+                                )
+                            }
+                        )
+                        
+                        logger.info("Using Tesseract OCR for PDF extraction...")
+                        
+                        ocr_result = ocr_converter.convert(file_path)
+                        ocr_markdown = ocr_result.document.export_to_markdown()
+                        ocr_text = ocr_result.document.export_to_text()
+                        
+                        # Use OCR result if it has more content
+                        ocr_content = ocr_text if len(ocr_text) > len(ocr_markdown) else ocr_markdown
+                        
+                        if len(ocr_content.strip()) > len(final_content.strip()):
+                            logger.info(f"OCR extracted more content: {len(ocr_content)} chars vs {len(final_content)} chars")
+                            final_content = ocr_content
+                            result = ocr_result
+                        else:
+                            logger.info(f"OCR did not improve extraction, using original")
+                    except Exception as ocr_error:
+                        logger.error(f"OCR fallback failed: {ocr_error}")
                 
                 # Log content stats to verify extraction
                 logger.info(f"Successfully converted {os.path.basename(file_path)}")
                 logger.info(f"  - Markdown export: {len(markdown_content)} characters")
                 logger.info(f"  - Text export: {len(text_content)} characters")
+                logger.info(f"  - Final content: {len(final_content)} characters")
+                if len(final_content) > 0:
+                    preview = final_content[:200].replace('\n', ' ')
+                    logger.info(f"  - Content preview: {preview}...")
                 logger.info(f"  - Using: {'text' if len(text_content) > len(markdown_content) else 'markdown'}")
                 
                 return (final_content, result.document)
@@ -185,6 +245,124 @@ class IngestionPipeline:
             except UnicodeDecodeError:
                 with open(file_path, 'r', encoding='latin-1') as f:
                     return (f.read(), None)
+    
+    def _extract_text_from_image(self, file_path: str) -> str:
+        """
+        Extract text from image using OCR.
+        Uses Tesseract as primary method (faster and more accurate).
+        Falls back to PaddleOCR if Tesseract fails.
+        """
+        image_path = Path(file_path).resolve()
+        logger.info(f"="*80)
+        logger.info(f"IMAGE OCR STARTING")
+        logger.info(f"File: {image_path.name}")
+        logger.info(f"Path: {image_path}")
+        logger.info(f"Exists: {image_path.exists()}")
+        logger.info(f"Size: {image_path.stat().st_size if image_path.exists() else 'N/A'} bytes")
+        logger.info(f"="*80)
+        
+        if not image_path.exists():
+            error_msg = f"[Error: Image file not found - {os.path.basename(file_path)}]"
+            logger.error(error_msg)
+            return error_msg
+        
+        # Method 1: Try Tesseract OCR (primary - faster and more accurate)
+        try:
+            logger.info(f"Method 1: Trying Tesseract OCR")
+            import pytesseract
+            from PIL import Image
+            
+            # Common Tesseract installation paths on Windows
+            tesseract_paths = [
+                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                r"C:\Users\Tesseract-OCR\tesseract.exe",
+            ]
+            
+            # Try to find Tesseract executable
+            tesseract_found = False
+            for tess_path in tesseract_paths:
+                if Path(tess_path).exists():
+                    pytesseract.pytesseract.tesseract_cmd = tess_path
+                    logger.info(f"Found Tesseract at: {tess_path}")
+                    tesseract_found = True
+                    break
+            
+            if not tesseract_found:
+                logger.warning("Tesseract executable not found in common locations, trying system PATH")
+            
+            # Open image
+            logger.info(f"Opening image file...")
+            img = Image.open(image_path)
+            logger.info(f"Image opened successfully - Size: {img.size}, Mode: {img.mode}")
+            
+            # Perform OCR with optimized settings
+            logger.info(f"Running Tesseract OCR...")
+            extracted_text = pytesseract.image_to_string(
+                img, 
+                config='--psm 3'  # Fully automatic page segmentation
+            )
+            
+            logger.info(f"Tesseract completed. Text length: {len(extracted_text)}")
+            
+            if extracted_text.strip():
+                logger.info(f"="*80)
+                logger.info(f"OCR SUCCESSFUL (Tesseract)")
+                logger.info(f"Extracted length: {len(extracted_text)} characters")
+                logger.info(f"Preview: {extracted_text[:200]}...")
+                logger.info(f"="*80)
+                return extracted_text
+            else:
+                logger.warning("Tesseract OCR produced empty result")
+                
+        except ImportError as e:
+            logger.error(f"pytesseract not installed: {e}")
+        except Exception as tesseract_error:
+            logger.error(f"Tesseract OCR failed with error: {type(tesseract_error).__name__}: {tesseract_error}", exc_info=True)
+        
+        # Method 2: Try PaddleOCR (fallback - pure Python solution)
+        try:
+            logger.info(f"Method 2: Trying PaddleOCR (fallback)")
+            from paddleocr import PaddleOCR
+            
+            # Initialize PaddleOCR (use English model, CPU mode)
+            logger.info(f"Initializing PaddleOCR...")
+            ocr = PaddleOCR(use_angle_cls=True, lang='en')
+            
+            logger.info(f"Running PaddleOCR on image...")
+            result = ocr.ocr(str(image_path), cls=True)
+            
+            logger.info(f"PaddleOCR completed. Result type: {type(result)}, Has results: {bool(result)}")
+            
+            # Extract text from results
+            if result and result[0]:
+                extracted_lines = []
+                for line in result[0]:
+                    if line and len(line) >= 2:
+                        text = line[1][0]  # line[1] is (text, confidence)
+                        extracted_lines.append(text)
+                
+                extracted_text = '\n'.join(extracted_lines)
+                
+                if extracted_text.strip():
+                    logger.info(f"="*80)
+                    logger.info(f"OCR SUCCESSFUL (PaddleOCR)")
+                    logger.info(f"Extracted length: {len(extracted_text)} characters")
+                    logger.info(f"Lines detected: {len(extracted_lines)}")
+                    logger.info(f"Preview: {extracted_text[:200]}...")
+                    logger.info(f"="*80)
+                    return extracted_text
+            
+            logger.warning("PaddleOCR produced empty result")
+                
+        except ImportError as e:
+            logger.info(f"PaddleOCR not available: {e}")
+        except Exception as paddle_error:
+            logger.error(f"PaddleOCR failed with error: {type(paddle_error).__name__}: {paddle_error}", exc_info=True)
+        
+        # If all methods fail
+        logger.error(f"All OCR methods failed for {os.path.basename(file_path)}")
+        return f"[Error: Could not extract text from image {os.path.basename(file_path)}. OCR processing failed.]"
     
     def _transcribe_audio(self, file_path: str) -> str:
         """Transcribe audio file using Whisper (via Docling or direct)."""

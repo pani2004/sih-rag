@@ -48,6 +48,31 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
     return <PDFViewer fileUrl={fileUrl} initialPage={initialPage} className={className} highlightText={highlightText} />;
   }
 
+  // Image files
+  if (fileType.startsWith('image/')) {
+    return (
+      <div className={`flex flex-col ${className}`}>
+        <div className="flex items-center justify-between gap-4 p-4 border-b bg-muted/30">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <span className="text-sm font-medium truncate" title={fileName}>{displayName}</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleDownload}>
+            <Download className="h-4 w-4 mr-2" />
+            Download
+          </Button>
+        </div>
+        <div className="flex-1 overflow-auto bg-muted/20 flex items-center justify-center p-6">
+          <img
+            src={fileUrl}
+            alt={fileName}
+            className="max-w-full max-h-[80vh] object-contain rounded border bg-background"
+          />
+        </div>
+      </div>
+    );
+  }
+
   // Text-based files (Markdown, Text)
   if (fileType === 'text/plain' || fileType === 'text/markdown') {
     return (
