@@ -89,9 +89,13 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
             {/* Document Info */}
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">{citation.document_title}</h3>
-                  <p className="text-sm text-muted-foreground">{citation.document_source}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-lg truncate" title={citation.document_title}>
+                    {citation.document_title.length > 50 ? `${citation.document_title.substring(0, 47)}...` : citation.document_title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground truncate" title={citation.document_source}>
+                    {citation.document_source.length > 60 ? `${citation.document_source.substring(0, 57)}...` : citation.document_source}
+                  </p>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
                   Citation {citation.number}

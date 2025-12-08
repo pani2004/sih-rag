@@ -73,7 +73,9 @@ export function DocumentDialogs({
       <Dialog open={!!viewingDocument} onOpenChange={onCloseView}>
         <DialogContent className="max-w-[95vw] w-[1400px] h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b">
-            <DialogTitle className="text-xl">{viewingDocument?.title}</DialogTitle>
+            <DialogTitle className="text-xl truncate" title={viewingDocument?.title}>
+              {viewingDocument?.title && viewingDocument.title.length > 80 ? `${viewingDocument.title.substring(0, 77)}...` : viewingDocument?.title}
+            </DialogTitle>
             <DialogDescription>View document content and details</DialogDescription>
           </DialogHeader>
 

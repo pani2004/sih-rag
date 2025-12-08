@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Sparkles, BarChart3, FileText, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Sparkles, BarChart3, FileText, PanelLeft, PanelLeftClose, Activity } from 'lucide-react';
 import Link from 'next/link';
 
 interface ChatHeaderProps {
@@ -62,6 +62,12 @@ export function ChatHeader({
               <Button variant="outline" size="sm">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Metrics
+              </Button>
+            </Link>
+            <Link href="/inngest-dev">
+              <Button variant="outline" size="sm">
+                <Activity className="h-4 w-4 mr-2" />
+                Inngest
               </Button>
             </Link>
             <Button

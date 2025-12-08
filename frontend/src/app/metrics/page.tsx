@@ -183,6 +183,12 @@ export default function MetricsPage() {
               Back to Chat
             </Button>
           </Link>
+          <Link href="/inngest-dev">
+            <Button variant="outline" size="sm">
+              <Activity className="w-4 h-4 mr-2" />
+              Inngest
+            </Button>
+          </Link>
           <div>
             <h1 className="text-4xl font-bold">System Metrics</h1>
             <p className="text-muted-foreground">Real-time RAG system performance monitoring</p>
