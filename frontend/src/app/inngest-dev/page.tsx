@@ -53,7 +53,7 @@ export default function InngestDevPage() {
                     Function queue monitoring and flushing Kafka queue with Redis DB
                   </p>
                 </div>
-              </div>
+              </div>      
             </div>
             <div className="flex items-center gap-2">
               <Link href="/metrics">

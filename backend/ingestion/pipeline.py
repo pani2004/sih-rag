@@ -20,6 +20,19 @@ from docling.datamodel.base_models import InputFormat
 from docling.pipeline.asr_pipeline import AsrPipeline
 from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
+try:
+    import torch
+    import torchaudio
+    TORCHAUDIO_AVAILABLE = True
+except ImportError:
+    TORCHAUDIO_AVAILABLE = False
+
 from backend.config import settings
 from backend.database.connection import db_manager, get_db_session
 from backend.database.operations import (
@@ -174,21 +187,29 @@ class IngestionPipeline:
                     return (f.read(), None)
     
     def _transcribe_audio(self, file_path: str) -> str:
-        """Transcribe audio file using Whisper via Docling."""
+        """Transcribe audio file using Whisper (via Docling or direct)."""
+        audio_path = Path(file_path).resolve()
+        logger.info(f"="*80)
+        logger.info(f"AUDIO TRANSCRIPTION STARTING")
+        logger.info(f"File: {audio_path.name}")
+        logger.info(f"Path: {audio_path}")
+        logger.info(f"Exists: {audio_path.exists()}")
+        logger.info(f"Size: {audio_path.stat().st_size if audio_path.exists() else 'N/A'} bytes")
+        logger.info(f"="*80)
+        
+        if not audio_path.exists():
+            error_msg = f"[Error: Audio file not found - {os.path.basename(file_path)}]"
+            logger.error(error_msg)
+            return error_msg
+        
+        # Method 1: Try Docling with Whisper
         try:
-            audio_path = Path(file_path).resolve()
-            logger.info(f"Transcribing audio: {audio_path.name}")
-            
-            if not audio_path.exists():
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-            # Use CPU-only mode for audio transcription (faster initialization)
-            logger.info(f"Audio transcription using CPU (faster initialization)")
+            logger.info(f"Method 1: Trying Docling with Whisper Turbo (CPU mode)")
             
             pipeline_options = AsrPipelineOptions()
             pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
-            # No GPU configuration - let Docling use CPU by default
             
+            logger.info(f"Creating DocumentConverter with audio format options...")
             converter = DocumentConverter(
                 format_options={
                     InputFormat.AUDIO: AudioFormatOption(
@@ -198,14 +219,131 @@ class IngestionPipeline:
                 }
             )
             
+            logger.info(f"Starting audio conversion with Docling...")
             result = converter.convert(audio_path)
-            markdown_content = result.document.export_to_markdown()
-            logger.info(f"Successfully transcribed {os.path.basename(file_path)}")
+            
+            logger.info(f"Extracting transcribed text...")
+            markdown_content = result.document.export_to_markdown().strip()
+            
+            if not markdown_content:
+                logger.warning(f"Markdown export empty, trying text export...")
+                markdown_content = result.document.export_to_text().strip()
+            
+            if not markdown_content:
+                raise RuntimeError("Docling transcription produced empty result")
+            
+            logger.info(f"="*80)
+            logger.info(f"TRANSCRIPTION SUCCESSFUL (Docling)")
+            logger.info(f"Transcribed length: {len(markdown_content)} characters")
+            logger.info(f"Preview: {markdown_content[:200]}...")
+            logger.info(f"="*80)
+            
             return markdown_content
             
-        except Exception as e:
-            logger.error(f"Failed to transcribe {file_path}: {e}")
-            return f"[Error: Could not transcribe {os.path.basename(file_path)}]"
+        except Exception as docling_error:
+            logger.warning(f"Docling transcription failed: {docling_error}")
+            logger.warning(f"Trying fallback method with OpenAI Whisper directly...")
+            
+            # Method 2: Fallback to direct OpenAI Whisper
+            if not WHISPER_AVAILABLE:
+                error_msg = f"[Error: Audio transcription failed. Whisper not available. Install with: pip install openai-whisper]"
+                logger.error(error_msg)
+                logger.error(f"Docling error was: {docling_error}", exc_info=True)
+                return error_msg
+            
+            try:
+                logger.info(f"Method 2: Using OpenAI Whisper with audio pre-loading")
+                
+                # Check if FFmpeg error - try to load audio manually first
+                if not TORCHAUDIO_AVAILABLE:
+                    raise RuntimeError("torchaudio not available for audio loading")
+                
+                logger.info(f"Loading audio without FFmpeg using pydub + soundfile...")
+                try:
+                    from pydub import AudioSegment
+                    import soundfile as sf
+                    import tempfile
+                    
+                    # Load audio with pydub (supports MP3, WAV, etc.)
+                    logger.info(f"Loading audio file with pydub...")
+                    audio = AudioSegment.from_file(str(audio_path))
+                    
+                    # Convert to mono if stereo
+                    if audio.channels > 1:
+                        logger.info(f"Converting from {audio.channels} channels to mono...")
+                        audio = audio.set_channels(1)
+                    
+                    # Set sample rate to 16kHz (Whisper requirement)
+                    if audio.frame_rate != 16000:
+                        logger.info(f"Resampling from {audio.frame_rate}Hz to 16000Hz...")
+                        audio = audio.set_frame_rate(16000)
+                    
+                    # Export to temporary WAV file for processing
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+                        temp_wav_path = temp_wav.name
+                        logger.info(f"Converting to WAV format: {temp_wav_path}")
+                        audio.export(temp_wav_path, format='wav')
+                    
+                    # Load WAV with soundfile to get numpy array
+                    logger.info(f"Loading WAV with soundfile...")
+                    audio_array, sample_rate = sf.read(temp_wav_path)
+                    
+                    # Cleanup temp file
+                    try:
+                        os.unlink(temp_wav_path)
+                    except:
+                        pass
+                    
+                    logger.info(f"Audio loaded: {len(audio_array)} samples at {sample_rate}Hz")
+                    
+                except Exception as audio_load_error:
+                    logger.error(f"Failed to load audio: {audio_load_error}", exc_info=True)
+                    raise RuntimeError(
+                        f"Audio loading failed. "
+                        f"Error: {audio_load_error}. "
+                        f"Tip: Ensure pydub and soundfile are installed."
+                    )
+                
+                # Now transcribe with Whisper using the pre-loaded audio
+                logger.info(f"Loading Whisper base model...")
+                model = whisper.load_model("base")
+                
+                logger.info(f"Transcribing audio (using pre-loaded array)...")
+                result = model.transcribe(audio_array, fp16=False)  # Pass numpy array directly
+                
+                transcribed_text = result["text"].strip()
+                
+                if not transcribed_text:
+                    raise RuntimeError("Whisper transcription produced empty result")
+                
+                logger.info(f"="*80)
+                logger.info(f"TRANSCRIPTION SUCCESSFUL (Whisper + torchaudio)")
+                logger.info(f"Transcribed length: {len(transcribed_text)} characters")
+                logger.info(f"Language detected: {result.get('language', 'unknown')}")
+                logger.info(f"Preview: {transcribed_text[:200]}...")
+                logger.info(f"="*80)
+                
+                return transcribed_text
+                
+            except Exception as whisper_error:
+                logger.error(f"Whisper fallback also failed: {whisper_error}", exc_info=True)
+                
+                # Check if it's FFmpeg error
+                error_str = str(whisper_error).lower()
+                if 'ffmpeg' in error_str or 'system cannot find the file' in error_str or isinstance(whisper_error, FileNotFoundError):
+                    error_msg = (
+                        f"[Error: FFmpeg is required for audio transcription but not found. "
+                        f"Please install FFmpeg: "
+                        f"Windows: choco install ffmpeg OR download from https://ffmpeg.org/download.html]"
+                    )
+                    logger.error(error_msg)
+                    return error_msg
+                
+                error_msg = f"[Error: Audio transcription failed - {type(whisper_error).__name__}: {str(whisper_error)}]"
+                logger.error(error_msg)
+                logger.error(f"Docling error: {docling_error}", exc_info=True)
+                logger.error(f"Whisper error: {whisper_error}", exc_info=True)
+                return error_msg
     
     def _extract_title(self, content: str, file_path: str) -> str:
         """Extract title from document content or filename."""
