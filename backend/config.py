@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     embedding_batch_delay: float = 0.5  # Delay between batches in seconds
     
     # RAG Configuration
-    top_k_results: int = 5  # Optimized for quality over quantity
-    similarity_threshold: float = 0.3
+    top_k_results: int = 50  # Max candidates to consider (can show 1-50 sources dynamically)
+    similarity_threshold: float = 0.1  # Cast wide net to find diverse sources
     use_hybrid_search: bool = True  # Enable hybrid search (vector + keyword)
     hybrid_vector_weight: float = 0.6  # Weight for vector search in hybrid mode
     hybrid_keyword_weight: float = 0.4  # Weight for keyword search in hybrid mode
@@ -38,13 +38,13 @@ class Settings(BaseSettings):
     # Reranker Configuration (Optimized for RTX 3050 Ti)
     reranker_enabled: bool = True  # Enabled with DSA optimizations (LRU cache, heap-based top-k, early stopping)
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    reranker_top_k: int = 100  # Number of candidates to fetch for reranking (deep dive into all sources)
+    reranker_top_k: int = 50  # Fetch 50 candidates to explore all documents
     reranker_batch_size: int = 128  # Increased for GPU (RTX 3050 Ti has 4GB VRAM)
     reranker_max_length: int = 256  # Reduced max sequence length for faster inference
-    reranker_use_cache: bool = True  # Enable LRU cache for repeated query-doc pairs
+    reranker_use_cache: bool = False  # DISABLED: Cache was causing same chunks for different queries
     reranker_cache_size: int = 200  # Cache capacity (stores ~200 query-doc scores)
     reranker_early_stop_threshold: float = 0.95  # Stop early if score exceeds this
-    reranker_min_score_threshold: float = -10.0  # Filter out very low scores
+    reranker_min_score_threshold: float = -100.0  # RELAXED: Allow more diverse results (cross-encoder scores vary widely)
     reranker_use_gpu: bool = True  # Explicitly use GPU (CUDA) for reranking
     
     # Storage Configuration

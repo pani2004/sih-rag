@@ -132,8 +132,14 @@ class Reranker:
             raise
     
     def _generate_cache_key(self, query: str, content: str) -> str:
-        """Generate hash key for caching."""
-        combined = f"{query}:{content[:200]}"  # Use first 200 chars for key
+        """
+        Generate hash key for caching.
+        
+        IMPORTANT: Must include full query and enough content to ensure uniqueness.
+        Using only first 200 chars of content can cause collisions with similar chunks.
+        """
+        # Use full query and more content for better cache key uniqueness
+        combined = f"{query}||{content[:500]}"  # Increased from 200 to 500 chars
         return hashlib.md5(combined.encode()).hexdigest()
     
     def _get_scores_optimized(self, query: str, results: List[SearchResult]) -> List[float]:
@@ -238,26 +244,16 @@ class Reranker:
             for i, (result, score) in enumerate(zip(results, scores)):
                 max_score_seen = max(max_score_seen, score)
                 
-                # Aggressive pruning: Skip very low scores
-                if score < self.config.min_score_threshold:
-                    continue
-                
                 # Update result with reranker score
                 result.similarity = score
                 
+                # SIMPLIFIED: Just take top_k results by score, no aggressive pruning
                 if len(min_heap) < top_k:
                     # Heap not full, add directly (with index for tie-breaking)
                     heapq.heappush(min_heap, (score, i, result))
                 else:
-                    # Smart selection: Only add if better than worst element
+                    # Only add if better than worst element
                     worst_score = min_heap[0][0]
-                    
-                    # Score gap pruning: If gap between best and worst is large enough,
-                    # and current score is worse than worst, skip it
-                    if len(min_heap) == top_k and max_score_seen - worst_score > self.config.score_gap_threshold:
-                        if score <= worst_score:
-                            continue
-                    
                     if score > worst_score:
                         heapq.heapreplace(min_heap, (score, i, result))
             

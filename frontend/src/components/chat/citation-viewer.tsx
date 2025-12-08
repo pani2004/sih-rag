@@ -124,9 +124,12 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
 
             {/* Content Display */}
             <div className="rounded-lg bg-muted/80 border border-border p-4 shadow-sm">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                {citation.content}
-              </p>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground font-mono">
+                {/* Clean up GLYPH markers and show content properly */}
+                {citation.content
+                  .replace(/GLYPH<[^>]+>/g, '') // Remove GLYPH markers
+                  .trim()}
+              </div>
             </div>
               </div>
             </ScrollArea>
@@ -146,7 +149,8 @@ export function CitationViewer({ citation, open, onOpenChange }: CitationViewerP
                 fileName={citation.document_title}
                 fileType={fileType}
                 initialPage={pageNumber} 
-                className="h-full" 
+                className="h-full"
+                highlightText={citation.content.replace(/GLYPH<[^>]+>/g, '').trim()}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, User, BookOpen, Clock, Zap } from 'lucide-react';
+import { Sparkles, User, BookOpen, Clock, Zap, ChevronDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -58,8 +59,15 @@ export function MessageItem({ message }: MessageItemProps) {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  p({ node, children, ...props }: any) {
+                    // Don't wrap code blocks in <p> tags
+                    return <div className="my-2" {...props}>{children}</div>;
+                  },
                   code({ node, inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
+                    const childText = String(children);
+                    
+                    // Detect code blocks (triple backticks) and inline code
                     return !inline && match ? (
                       <SyntaxHighlighter
                         style={vscDarkPlus}
@@ -67,12 +75,40 @@ export function MessageItem({ message }: MessageItemProps) {
                         PreTag="div"
                         {...props}
                       >
-                        {String(children).replace(/\n$/, '')}
+                        {childText.replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    ) : !inline ? (
+                      // Code block without language (e.g., function signatures, commands)
+                      <SyntaxHighlighter
+                        style={vscDarkPlus}
+                        language="text"
+                        PreTag="div"
+                        customStyle={{
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          padding: '1rem',
+                          borderRadius: '0.5rem',
+                        }}
+                        {...props}
+                      >
+                        {childText.replace(/\n$/, '')}
                       </SyntaxHighlighter>
                     ) : (
                       <code className={className} {...props}>
                         {children}
                       </code>
+                    );
+                  },
+                  a({ node, children, href, ...props }: any) {
+                    return (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline decoration-2 underline-offset-2 transition-colors font-medium"
+                        {...props}
+                      >
+                        {children}
+                      </a>
                     );
                   },
                 }}

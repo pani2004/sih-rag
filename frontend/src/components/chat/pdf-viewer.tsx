@@ -21,9 +21,10 @@ interface PDFViewerProps {
   fileUrl: string;
   initialPage?: number;
   className?: string;
+  highlightText?: string;
 }
 
-export function PDFViewer({ fileUrl, initialPage = 1, className = '' }: PDFViewerProps) {
+export function PDFViewer({ fileUrl, initialPage = 1, className = '', highlightText }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(initialPage);
   const [scale, setScale] = useState<number>(1.0);
@@ -32,6 +33,62 @@ export function PDFViewer({ fileUrl, initialPage = 1, className = '' }: PDFViewe
   useEffect(() => {
     setPageNumber(initialPage);
   }, [initialPage]);
+
+  // Custom text renderer to highlight the citation text
+  function customTextRenderer(textItem: any) {
+    if (!highlightText) return textItem.str;
+    
+    const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim();
+    const itemText = textItem.str.toLowerCase();
+    
+    if (searchText.includes(itemText) || itemText.includes(searchText.substring(0, 50))) {
+      return textItem.str;
+    }
+    
+    return textItem.str;
+  }
+
+  // Highlight matching text in the PDF after rendering
+  useEffect(() => {
+    if (!highlightText) return;
+
+    const highlightMatches = () => {
+      const textLayer = document.querySelector('.react-pdf__Page__textContent');
+      if (!textLayer) return;
+
+      const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim().substring(0, 200);
+      const spans = textLayer.querySelectorAll('span');
+      
+      spans.forEach(span => {
+        span.style.backgroundColor = '';
+        span.style.color = '';
+      });
+
+      let accumulatedText = '';
+      const matchingSpans: HTMLElement[] = [];
+      
+      spans.forEach((span, index) => {
+        accumulatedText += span.textContent?.toLowerCase() || '';
+        matchingSpans.push(span as HTMLElement);
+        
+        if (accumulatedText.length >= searchText.length) {
+          if (accumulatedText.includes(searchText)) {
+            matchingSpans.forEach(s => {
+              s.style.backgroundColor = 'rgba(255, 255, 0, 0.4)';
+              s.style.color = 'black';
+              s.style.borderRadius = '2px';
+            });
+          }
+          
+          accumulatedText = accumulatedText.slice(1);
+          matchingSpans.shift();
+        }
+      });
+    };
+
+    const timer = setTimeout(highlightMatches, 500);
+    return () => clearTimeout(timer);
+  }, [highlightText, pageNumber, scale]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -115,9 +172,10 @@ export function PDFViewer({ fileUrl, initialPage = 1, className = '' }: PDFViewe
           <Page
             pageNumber={pageNumber}
             scale={scale}
-            renderTextLayer={false}
+            renderTextLayer={true}
             renderAnnotationLayer={false}
             className="shadow-lg"
+            customTextRenderer={highlightText ? customTextRenderer : undefined}
           />
         </Document>
       </div>

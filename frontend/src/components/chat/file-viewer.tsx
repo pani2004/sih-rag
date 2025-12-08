@@ -20,9 +20,10 @@ interface FileViewerProps {
   fileType: string;
   initialPage?: number;
   className?: string;
+  highlightText?: string;
 }
 
-export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, className = '' }: FileViewerProps) {
+export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, className = '', highlightText }: FileViewerProps) {
   const [audioError, setAudioError] = useState(false);
 
   const handleDownload = () => {
@@ -34,7 +35,7 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
 
   // PDF files
   if (fileType === 'application/pdf') {
-    return <PDFViewer fileUrl={fileUrl} initialPage={initialPage} className={className} />;
+    return <PDFViewer fileUrl={fileUrl} initialPage={initialPage} className={className} highlightText={highlightText} />;
   }
 
   // Text-based files (Markdown, Text)

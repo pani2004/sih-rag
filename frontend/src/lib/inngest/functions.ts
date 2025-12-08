@@ -53,6 +53,7 @@ export const processChatMessageFunction = inngest.createFunction(
       }
 
       const data = await response.json();
+      // Show ALL chunks returned by backend (no pruning)
       const citations = data.results.map((result: any, index: number) => ({
         number: index + 1,
         chunk_id: result.chunk_id,
@@ -64,7 +65,7 @@ export const processChatMessageFunction = inngest.createFunction(
         similarity: result.similarity,
       }));
 
-      console.log(`[Inngest] Found ${citations.length} relevant chunks`);
+      console.log(`[Inngest] Found ${citations.length} relevant chunks - showing ALL`);
       return citations;
     });
 

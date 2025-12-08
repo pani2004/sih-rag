@@ -238,19 +238,92 @@ async def chat_stream(
             search_results = await rag_engine.search(session, request.message)
             search_time = time.time() - search_start
             
-            # Build citations
+            # Build citations with intelligent diversification
+            # Strategy: Show ALL relevant sources (1-50) with diversity controls
             citations = []
-            for i, result in enumerate(search_results, 1):
+            seen_chunk_ids = set()
+            seen_pages = set()  # Track (document_id, page_number)
+            seen_documents = {}  # Track document_id -> count
+            citation_number = 1
+            
+            max_citations_per_page = 1  # Only 1 chunk per page
+            # No hard limit on total citations - show all relevant results
+            
+            # First pass: Prioritize diverse documents (one from each document)
+            for result in search_results:
+                chunk_id_str = str(result.chunk_id)
+                doc_id_str = str(result.document_id)
+                
+                if chunk_id_str in seen_chunk_ids:
+                    continue
+                
+                # Skip if we already have a citation from this document (first pass)
+                if doc_id_str in seen_documents:
+                    continue
+                
+                # Check page deduplication
+                page_number = None
+                if result.chunk_metadata and isinstance(result.chunk_metadata, dict):
+                    page_number = result.chunk_metadata.get('page') or result.chunk_metadata.get('page_number')
+                
+                if page_number is not None:
+                    page_key = (doc_id_str, page_number)
+                    if page_key in seen_pages:
+                        continue
+                    seen_pages.add(page_key)
+                
+                seen_chunk_ids.add(chunk_id_str)
+                seen_documents[doc_id_str] = 1
+                
                 citations.append({
-                    "number": i,
-                    "chunk_id": str(result.chunk_id),
-                    "document_id": str(result.document_id),
+                    "number": citation_number,
+                    "chunk_id": chunk_id_str,
+                    "document_id": doc_id_str,
                     "document_title": result.document_title,
                     "document_source": result.document_source,
                     "content": result.content,
                     "metadata": result.chunk_metadata,
                     "similarity": result.similarity
                 })
+                citation_number += 1
+                logger.debug(f"Added citation {citation_number-1} from {result.document_title} (page {page_number}), similarity: {result.similarity:.4f}")
+            
+            # Second pass: Add all remaining high-scoring chunks (no hard limits)
+            for result in search_results:
+                chunk_id_str = str(result.chunk_id)
+                doc_id_str = str(result.document_id)
+                
+                if chunk_id_str in seen_chunk_ids:
+                    continue
+                    
+                    # Check page deduplication
+                    page_number = None
+                    if result.chunk_metadata and isinstance(result.chunk_metadata, dict):
+                        page_number = result.chunk_metadata.get('page') or result.chunk_metadata.get('page_number')
+                    
+                    if page_number is not None:
+                        page_key = (doc_id_str, page_number)
+                        if page_key in seen_pages:
+                            continue
+                        seen_pages.add(page_key)
+                    
+                    seen_chunk_ids.add(chunk_id_str)
+                    seen_documents[doc_id_str] = seen_documents.get(doc_id_str, 0) + 1
+                    
+                    citations.append({
+                        "number": citation_number,
+                        "chunk_id": chunk_id_str,
+                        "document_id": doc_id_str,
+                        "document_title": result.document_title,
+                        "document_source": result.document_source,
+                        "content": result.content,
+                        "metadata": result.chunk_metadata,
+                        "similarity": result.similarity
+                    })
+                    citation_number += 1
+                    logger.debug(f"Added citation {citation_number-1} from {result.document_title} (page {page_number}), similarity: {result.similarity:.4f}")
+            
+            logger.info(f"Built {len(citations)} diverse citations from {len(seen_documents)} documents")
             
             # Send citations with search time
             citations_data = json.dumps({'status': 'citations', 'citations': citations, 'thinkingTime': round(search_time, 2)})
