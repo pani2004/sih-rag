@@ -120,54 +120,119 @@ export function MessageItem({ message }: MessageItemProps) {
           
           {/* Citations and Timing Display */}
           {message.role === 'assistant' && (message.citations?.length || message.thinkingTime || message.responseTime) && (
-            <div className="mt-2 space-y-1">
-              <div className="flex items-center gap-4 text-xs text-muted-foreground px-2">
-                {message.citations && message.citations.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <BookOpen className="h-3 w-3" />
-                    <span>{message.citations.length} source{message.citations.length > 1 ? 's' : ''}</span>
-                  </div>
-                )}
-                {message.thinkingTime && (
-                  <div className="flex items-center gap-1.5">
-                    <Zap className="h-3 w-3" />
-                    <span>Think: {message.thinkingTime}s</span>
-                  </div>
-                )}
-                {message.responseTime && (
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3 w-3" />
-                    <span>Gen: {message.responseTime}s</span>
-                  </div>
-                )}
-              </div>
-              {message.citations?.map((citation) => {
-                const filename = citation.document_source.split('/').pop() || citation.document_source;
-                const pageNum = citation.metadata?.page || citation.metadata?.page_number;
-                
-                return (
-                  <Button
-                    key={citation.number}
-                    variant="outline"
-                    className="w-full justify-start h-auto p-2 hover:bg-accent"
-                    onClick={() => handleCitationClick(citation)}
-                  >
-                    <div className="flex items-center gap-2 w-full">
-                      <div className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
-                        {citation.number}
-                      </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center gap-1 text-sm">
-                          <span className="font-medium truncate">{filename}</span>
-                          {pageNum && (
-                            <span className="text-muted-foreground flex-shrink-0">• Page {pageNum}</span>
+            <div className="mt-2 space-y-2">
+              {/* Thinking Process Accordion */}
+              {message.citations && message.citations.length > 0 && (
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="thinking" className="border rounded-lg bg-muted/30">
+                    <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                      <div className="flex items-center gap-4 text-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Zap className="h-3 w-3" />
+                          <span className="font-medium">Thinking Process</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <BookOpen className="h-3 w-3" />
+                            <span>{message.citations.length} source{message.citations.length > 1 ? 's' : ''}</span>
+                          </div>
+                          {message.thinkingTime && (
+                            <div className="flex items-center gap-1.5">
+                              <Zap className="h-3 w-3" />
+                              <span>Search: {message.thinkingTime}s</span>
+                            </div>
+                          )}
+                          {message.responseTime && (
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="h-3 w-3" />
+                              <span>Gen: {message.responseTime}s</span>
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 pb-3 pt-0">
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground mb-2">
+                          Retrieved and analyzed {message.citations.length} relevant sources:
+                        </div>
+                        {message.citations.map((citation) => {
+                          const filename = citation.document_source.split('/').pop() || citation.document_source;
+                          const pageNum = citation.metadata?.page || citation.metadata?.page_number;
+                          const chunkInfo = citation.metadata?.chunk_method ? 
+                            `${citation.metadata.chunk_method} • ` : '';
+                          
+                          return (
+                            <div
+                              key={citation.number}
+                              className="border rounded-md p-2 bg-background hover:bg-accent cursor-pointer transition-colors"
+                              onClick={() => handleCitationClick(citation)}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className="shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold mt-0.5">
+                                  {citation.number}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <span className="font-semibold truncate">{filename}</span>
+                                    {pageNum && (
+                                      <span className="text-muted-foreground shrink-0">• Page {pageNum}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground line-clamp-2">
+                                    {citation.content.replace(/GLYPH<[^>]+>/g, '').trim().substring(0, 150)}...
+                                  </p>
+                                  {citation.similarity !== undefined && (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span className="text-[10px]">
+                                        {chunkInfo}Relevance: {citation.similarity.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+
+              {/* Quick Citation Buttons (kept for backward compatibility) */}
+              <div className="flex flex-wrap gap-1">
+                {message.citations?.slice(0, 3).map((citation) => {
+                  const filename = citation.document_source.split('/').pop() || citation.document_source;
+                  const pageNum = citation.metadata?.page || citation.metadata?.page_number;
+                  
+                  return (
+                    <Button
+                      key={citation.number}
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => handleCitationClick(citation)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold">[{citation.number}]</span>
+                        <span className="truncate max-w-[150px]">{filename}</span>
+                        {pageNum && <span className="text-muted-foreground">p.{pageNum}</span>}
+                      </div>
+                    </Button>
+                  );
+                })}
+                {message.citations && message.citations.length > 3 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground"
+                    disabled
+                  >
+                    +{message.citations.length - 3} more
                   </Button>
-                );
-              })}
+                )}
+              </div>
             </div>
           )}
         </div>

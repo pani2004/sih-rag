@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
 
 // Dynamic import to avoid SSR issues with DOMMatrix
 let Document: any;
@@ -29,66 +31,125 @@ export function PDFViewer({ fileUrl, initialPage = 1, className = '', highlightT
   const [pageNumber, setPageNumber] = useState<number>(initialPage);
   const [scale, setScale] = useState<number>(1.0);
   const [loading, setLoading] = useState<boolean>(true);
+  const [pageRendered, setPageRendered] = useState<boolean>(false);
 
   useEffect(() => {
     setPageNumber(initialPage);
+    setPageRendered(false);
   }, [initialPage]);
 
-  // Custom text renderer to highlight the citation text
-  function customTextRenderer(textItem: any) {
-    if (!highlightText) return textItem.str;
-    
-    const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim();
-    const itemText = textItem.str.toLowerCase();
-    
-    if (searchText.includes(itemText) || itemText.includes(searchText.substring(0, 50))) {
-      return textItem.str;
-    }
-    
-    return textItem.str;
-  }
-
-  // Highlight matching text in the PDF after rendering
   useEffect(() => {
-    if (!highlightText) return;
+    setPageRendered(false);
+  }, [pageNumber, scale]);
 
-    const highlightMatches = () => {
-      const textLayer = document.querySelector('.react-pdf__Page__textContent');
-      if (!textLayer) return;
+  // Add highlight overlay using canvas approach
+  useEffect(() => {
+    if (!highlightText || !pageRendered) return;
 
-      const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim().substring(0, 200);
-      const spans = textLayer.querySelectorAll('span');
-      
-      spans.forEach(span => {
-        span.style.backgroundColor = '';
-        span.style.color = '';
-      });
+    let isCancelled = false;
+    let retryCount = 0;
 
-      let accumulatedText = '';
-      const matchingSpans: HTMLElement[] = [];
-      
-      spans.forEach((span, index) => {
-        accumulatedText += span.textContent?.toLowerCase() || '';
-        matchingSpans.push(span as HTMLElement);
-        
-        if (accumulatedText.length >= searchText.length) {
-          if (accumulatedText.includes(searchText)) {
-            matchingSpans.forEach(s => {
-              s.style.backgroundColor = 'rgba(255, 255, 0, 0.4)';
-              s.style.color = 'black';
-              s.style.borderRadius = '2px';
-            });
-          }
-          
-          accumulatedText = accumulatedText.slice(1);
-          matchingSpans.shift();
+    const addHighlightOverlay = () => {
+      if (isCancelled) return;
+
+      const pageElement = document.querySelector('.react-pdf__Page');
+      if (!pageElement) {
+        if (retryCount < 15) {
+          retryCount++;
+          setTimeout(addHighlightOverlay, 200);
         }
+        return;
+      }
+
+      // Remove existing highlight overlay
+      const existingOverlay = pageElement.querySelector('.highlight-overlay');
+      if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
+      const textLayer = pageElement.querySelector('.react-pdf__Page__textContent') as HTMLElement;
+      if (!textLayer) {
+        if (retryCount < 15) {
+          retryCount++;
+          setTimeout(addHighlightOverlay, 200);
+        }
+        return;
+      }
+
+      const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim();
+      const spans = Array.from(textLayer.querySelectorAll('span'));
+
+      if (spans.length === 0) {
+        if (retryCount < 15) {
+          retryCount++;
+          setTimeout(addHighlightOverlay, 200);
+        }
+        return;
+      }
+
+      // Create overlay container
+      const overlay = document.createElement('div');
+      overlay.className = 'highlight-overlay';
+      overlay.style.position = 'absolute';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100%';
+      overlay.style.height = '100%';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.zIndex = '1';
+
+      // Find matching text spans
+      let fullText = '';
+      const spanMap: { text: string; span: HTMLElement; startIndex: number }[] = [];
+      
+      spans.forEach((span) => {
+        const text = span.textContent || '';
+        spanMap.push({
+          text,
+          span: span as HTMLElement,
+          startIndex: fullText.length,
+        });
+        fullText += text;
       });
+
+      const fullTextLower = fullText.toLowerCase();
+      const searchIndex = fullTextLower.indexOf(searchText.substring(0, 100));
+
+      if (searchIndex !== -1) {
+        const endIndex = searchIndex + Math.min(searchText.length, 200);
+        
+        // Find spans that contain the highlighted text
+        spanMap.forEach(({ span, startIndex, text }) => {
+          const spanEndIndex = startIndex + text.length;
+          
+          if (spanEndIndex > searchIndex && startIndex < endIndex) {
+            const rect = span.getBoundingClientRect();
+            const pageRect = pageElement.getBoundingClientRect();
+            
+            const highlightBox = document.createElement('div');
+            highlightBox.style.position = 'absolute';
+            highlightBox.style.left = `${rect.left - pageRect.left}px`;
+            highlightBox.style.top = `${rect.top - pageRect.top}px`;
+            highlightBox.style.width = `${rect.width}px`;
+            highlightBox.style.height = `${rect.height}px`;
+            highlightBox.style.backgroundColor = 'rgba(255, 255, 0, 0.5)';
+            highlightBox.style.mixBlendMode = 'multiply';
+            
+            overlay.appendChild(highlightBox);
+          }
+        });
+
+        (pageElement as HTMLElement).style.position = 'relative';
+        pageElement.appendChild(overlay);
+      }
     };
 
-    const timer = setTimeout(highlightMatches, 500);
-    return () => clearTimeout(timer);
-  }, [highlightText, pageNumber, scale]);
+    const timer = setTimeout(addHighlightOverlay, 500);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [highlightText, pageRendered]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -175,7 +236,7 @@ export function PDFViewer({ fileUrl, initialPage = 1, className = '', highlightT
             renderTextLayer={true}
             renderAnnotationLayer={false}
             className="shadow-lg"
-            customTextRenderer={highlightText ? customTextRenderer : undefined}
+            onRenderSuccess={() => setPageRendered(true)}
           />
         </Document>
       </div>
