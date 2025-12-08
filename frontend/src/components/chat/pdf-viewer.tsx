@@ -3,21 +3,12 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import { pdfjs, Document, Page } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 
-// Dynamic import to avoid SSR issues with DOMMatrix
-let Document: any;
-let Page: any;
-let pdfjs: any;
-
-if (typeof window !== 'undefined') {
-  const reactPdf = require('react-pdf');
-  Document = reactPdf.Document;
-  Page = reactPdf.Page;
-  pdfjs = reactPdf.pdfjs;
-  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-}
+// Configure PDF.js worker to use the local file from public directory
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFViewerProps {
   fileUrl: string;
