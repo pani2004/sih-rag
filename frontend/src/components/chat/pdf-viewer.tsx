@@ -42,109 +42,103 @@ export function PDFViewer({ fileUrl, initialPage = 1, className = '', highlightT
     setPageRendered(false);
   }, [pageNumber, scale]);
 
-  // Add highlight overlay using canvas approach
+  // Direct text highlighting - simpler approach
   useEffect(() => {
-    if (!highlightText || !pageRendered) return;
+    if (!highlightText || !pageRendered) {
+      console.log('Highlight skipped:', { hasText: !!highlightText, pageRendered });
+      return;
+    }
+
+    console.log('Starting highlight for:', highlightText.substring(0, 80));
 
     let isCancelled = false;
     let retryCount = 0;
 
-    const addHighlightOverlay = () => {
+    const applyHighlight = () => {
       if (isCancelled) return;
 
-      const pageElement = document.querySelector('.react-pdf__Page');
-      if (!pageElement) {
-        if (retryCount < 15) {
-          retryCount++;
-          setTimeout(addHighlightOverlay, 200);
-        }
-        return;
-      }
-
-      // Remove existing highlight overlay
-      const existingOverlay = pageElement.querySelector('.highlight-overlay');
-      if (existingOverlay) {
-        existingOverlay.remove();
-      }
-
-      const textLayer = pageElement.querySelector('.react-pdf__Page__textContent') as HTMLElement;
+      const textLayer = document.querySelector('.react-pdf__Page__textContent') as HTMLElement;
+      
       if (!textLayer) {
-        if (retryCount < 15) {
+        console.log('Text layer not found, retry:', retryCount);
+        if (retryCount < 20) {
           retryCount++;
-          setTimeout(addHighlightOverlay, 200);
+          setTimeout(applyHighlight, 300);
         }
         return;
       }
 
-      const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim();
-      const spans = Array.from(textLayer.querySelectorAll('span'));
+      const spans = Array.from(textLayer.querySelectorAll('span')) as HTMLElement[];
 
       if (spans.length === 0) {
-        if (retryCount < 15) {
+        console.log('No spans found, retry:', retryCount);
+        if (retryCount < 20) {
           retryCount++;
-          setTimeout(addHighlightOverlay, 200);
+          setTimeout(applyHighlight, 300);
         }
         return;
       }
 
-      // Create overlay container
-      const overlay = document.createElement('div');
-      overlay.className = 'highlight-overlay';
-      overlay.style.position = 'absolute';
-      overlay.style.top = '0';
-      overlay.style.left = '0';
-      overlay.style.width = '100%';
-      overlay.style.height = '100%';
-      overlay.style.pointerEvents = 'none';
-      overlay.style.zIndex = '1';
+      console.log('Found', spans.length, 'text spans');
 
-      // Find matching text spans
+      // Clear previous highlights
+      spans.forEach(span => {
+        span.style.backgroundColor = '';
+        span.style.color = '';
+        span.style.fontWeight = '';
+        span.style.padding = '';
+      });
+
+      const searchText = highlightText.toLowerCase().replace(/\s+/g, ' ').trim();
       let fullText = '';
-      const spanMap: { text: string; span: HTMLElement; startIndex: number }[] = [];
+      const spanMap: { span: HTMLElement; start: number; end: number }[] = [];
       
       spans.forEach((span) => {
         const text = span.textContent || '';
         spanMap.push({
-          text,
-          span: span as HTMLElement,
-          startIndex: fullText.length,
+          span,
+          start: fullText.length,
+          end: fullText.length + text.length,
         });
-        fullText += text;
+        fullText += text.toLowerCase();
       });
 
-      const fullTextLower = fullText.toLowerCase();
-      const searchIndex = fullTextLower.indexOf(searchText.substring(0, 100));
+      console.log('Total text length:', fullText.length);
 
-      if (searchIndex !== -1) {
-        const endIndex = searchIndex + Math.min(searchText.length, 200);
+      // Try finding the text with multiple strategies
+      let matchStart = fullText.indexOf(searchText.substring(0, 100));
+      
+      if (matchStart === -1) {
+        matchStart = fullText.indexOf(searchText.substring(0, 50));
+      }
+      
+      if (matchStart === -1) {
+        matchStart = fullText.indexOf(searchText.substring(0, 30));
+      }
+
+      if (matchStart !== -1) {
+        const matchEnd = matchStart + Math.min(searchText.length, 250);
+        console.log('Match found from', matchStart, 'to', matchEnd);
         
-        // Find spans that contain the highlighted text
-        spanMap.forEach(({ span, startIndex, text }) => {
-          const spanEndIndex = startIndex + text.length;
-          
-          if (spanEndIndex > searchIndex && startIndex < endIndex) {
-            const rect = span.getBoundingClientRect();
-            const pageRect = pageElement.getBoundingClientRect();
-            
-            const highlightBox = document.createElement('div');
-            highlightBox.style.position = 'absolute';
-            highlightBox.style.left = `${rect.left - pageRect.left}px`;
-            highlightBox.style.top = `${rect.top - pageRect.top}px`;
-            highlightBox.style.width = `${rect.width}px`;
-            highlightBox.style.height = `${rect.height}px`;
-            highlightBox.style.backgroundColor = 'rgba(255, 255, 0, 0.5)';
-            highlightBox.style.mixBlendMode = 'multiply';
-            
-            overlay.appendChild(highlightBox);
+        let highlighted = 0;
+        spanMap.forEach(({ span, start, end }) => {
+          if (end > matchStart && start < matchEnd) {
+            span.style.backgroundColor = '#FFFF00';
+            span.style.color = '#000000';
+            span.style.fontWeight = 'bold';
+            span.style.padding = '2px 4px';
+            span.style.borderRadius = '3px';
+            highlighted++;
           }
         });
-
-        (pageElement as HTMLElement).style.position = 'relative';
-        pageElement.appendChild(overlay);
+        console.log('Highlighted', highlighted, 'spans');
+      } else {
+        console.log('No match found. Search:', searchText.substring(0, 50));
+        console.log('Text preview:', fullText.substring(0, 100));
       }
     };
 
-    const timer = setTimeout(addHighlightOverlay, 500);
+    const timer = setTimeout(applyHighlight, 1000);
     return () => {
       isCancelled = true;
       clearTimeout(timer);
