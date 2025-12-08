@@ -121,9 +121,11 @@ export function DocumentManager() {
                     <div className="flex items-start gap-3">
                       <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium truncate">{doc.title}</h4>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {doc.source}
+                        <h4 className="font-medium truncate" title={doc.title}>
+                          {doc.title.length > 40 ? `${doc.title.substring(0, 37)}...` : doc.title}
+                        </h4>
+                        <p className="text-sm text-muted-foreground truncate" title={doc.source}>
+                          {doc.source.length > 50 ? `${doc.source.substring(0, 47)}...` : doc.source}
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                           <Calendar className="h-3 w-3" />

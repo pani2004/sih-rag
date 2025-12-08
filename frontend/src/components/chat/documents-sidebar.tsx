@@ -181,9 +181,11 @@ export function DocumentsSidebar({
                     <div className="flex items-center gap-3">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0 overflow-hidden">
-                        <p className="text-sm font-medium truncate" title={doc.title}>{doc.title}</p>
+                        <p className="text-sm font-medium truncate" title={doc.title}>
+                          {doc.title.length > 30 ? `${doc.title.substring(0, 27)}...` : doc.title}
+                        </p>
                         <p className="text-xs text-muted-foreground truncate" title={doc.source}>
-                          {doc.source}
+                          {doc.source.length > 35 ? `${doc.source.substring(0, 32)}...` : doc.source}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">

@@ -26,6 +26,16 @@ interface FileViewerProps {
 export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, className = '', highlightText }: FileViewerProps) {
   const [audioError, setAudioError] = useState(false);
 
+  const truncateFileName = (name: string, maxLength: number = 50) => {
+    if (name.length <= maxLength) return name;
+    const ext = name.split('.').pop() || '';
+    const nameWithoutExt = name.substring(0, name.lastIndexOf('.'));
+    const truncated = nameWithoutExt.substring(0, maxLength - ext.length - 4);
+    return `${truncated}...${ext}`;
+  };
+
+  const displayName = truncateFileName(fileName);
+
   const handleDownload = () => {
     const a = document.createElement('a');
     a.href = fileUrl;
@@ -41,11 +51,11 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
   // Text-based files (Markdown, Text)
   if (fileType === 'text/plain' || fileType === 'text/markdown') {
     return (
-      <div className={`flex flex-col ${className}`}>
+      <div className="flex flex-col ${className}">
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-muted/30">
           <div className="flex items-center gap-2">
             <FileCode className="h-5 w-5" />
-            <span className="text-sm font-medium">{fileName}</span>
+            <span className="text-sm font-medium truncate" title={fileName}>{displayName}</span>
           </div>
           <Button variant="outline" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
@@ -66,11 +76,11 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
   // Audio files
   if (fileType.startsWith('audio/')) {
     return (
-      <div className={`flex flex-col ${className}`}>
+      <div className="flex flex-col ${className}">
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-muted/30">
           <div className="flex items-center gap-2">
             <Volume2 className="h-5 w-5" />
-            <span className="text-sm font-medium">{fileName}</span>
+            <span className="text-sm font-medium truncate" title={fileName}>{displayName}</span>
           </div>
           <Button variant="outline" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
@@ -89,7 +99,7 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
                 Your browser does not support the audio element.
               </audio>
               <div className="mt-4 text-center text-sm text-muted-foreground">
-                <p>{fileName}</p>
+                <p className="truncate px-4" title={fileName}>{displayName}</p>
               </div>
             </div>
           ) : (
@@ -122,11 +132,11 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
     const Icon = icon;
 
     return (
-      <div className={`flex flex-col ${className}`}>
+      <div className="flex flex-col ${className}">
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-muted/30">
           <div className="flex items-center gap-2">
             <Icon className="h-5 w-5" />
-            <span className="text-sm font-medium">{fileName}</span>
+            <span className="text-sm font-medium truncate" title={fileName}>{displayName}</span>
           </div>
           <Button variant="outline" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />
@@ -137,7 +147,7 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
           <div className="bg-background rounded border p-8 text-center space-y-4">
             <Icon className="h-16 w-16 mx-auto text-muted-foreground" />
             <div>
-              <h3 className="font-semibold text-lg">{fileName}</h3>
+              <h3 className="font-semibold text-lg truncate px-4" title={fileName}>{displayName}</h3>
               <p className="text-sm text-muted-foreground mt-2">
                 {fileType.includes('word') && 'Word Document'}
                 {fileType.includes('spreadsheet') && 'Excel Spreadsheet'}
@@ -167,7 +177,7 @@ export function FileViewer({ fileUrl, fileName, fileType, initialPage = 1, class
       <div className="flex items-center justify-between gap-4 p-4 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5" />
-          <span className="text-sm font-medium">{fileName}</span>
+          <span className="text-sm font-medium truncate" title={fileName}>{displayName}</span>
         </div>
         <Button variant="outline" size="sm" onClick={handleDownload}>
           <Download className="h-4 w-4 mr-2" />
